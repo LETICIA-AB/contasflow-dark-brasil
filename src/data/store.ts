@@ -61,25 +61,9 @@ export const CATEGORIES = [
   "Outros",
 ];
 
-// === Domínio account mapping ===
-export const DEBIT_ACCOUNTS: Record<string, string> = {
-  "Folha de Pagamento": "310001",
-  "Impostos e Tributos": "330001",
-  "Fornecedores / Compras": "320001",
-  "Aluguel": "320002",
-  "Serviços Contratados": "320003",
-  "Despesas Bancárias": "340001",
-  "Empréstimos e Financiamentos": "350001",
-  "Retiradas dos Sócios": "360001",
-  "Outros": "390001",
-};
-
-export const CREDIT_ACCOUNTS: Record<string, string> = {
-  "Receita de Vendas": "410001",
-  "Receita de Serviços": "410002",
-};
-
-export const BANK_ACCOUNT = "111020";
+// Account mappings are now in src/data/chartOfAccounts.ts
+// Re-export for backward compatibility
+export { CATEGORY_DEBIT_MAP as DEBIT_ACCOUNTS, CATEGORY_CREDIT_MAP as CREDIT_ACCOUNTS, BANK_ACCOUNT_MAP, resolveAccounts } from "./chartOfAccounts";
 
 // === Storage keys ===
 const KEYS = {
