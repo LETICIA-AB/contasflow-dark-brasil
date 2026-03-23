@@ -7,6 +7,7 @@ export interface Transaction {
   type: "credit" | "debit";
   category: string;
   classifiedBy: "auto" | "client" | "accountant" | "pending";
+  ruleId?: string;
   approved: boolean;
 }
 
@@ -60,25 +61,9 @@ export const CATEGORIES = [
   "Outros",
 ];
 
-// === Domínio account mapping ===
-export const DEBIT_ACCOUNTS: Record<string, string> = {
-  "Folha de Pagamento": "310001",
-  "Impostos e Tributos": "330001",
-  "Fornecedores / Compras": "320001",
-  "Aluguel": "320002",
-  "Serviços Contratados": "320003",
-  "Despesas Bancárias": "340001",
-  "Empréstimos e Financiamentos": "350001",
-  "Retiradas dos Sócios": "360001",
-  "Outros": "390001",
-};
-
-export const CREDIT_ACCOUNTS: Record<string, string> = {
-  "Receita de Vendas": "410001",
-  "Receita de Serviços": "410002",
-};
-
-export const BANK_ACCOUNT = "111020";
+// Account mappings are now in src/data/chartOfAccounts.ts
+// Re-export for backward compatibility
+export { CATEGORY_DEBIT_MAP as DEBIT_ACCOUNTS, CATEGORY_CREDIT_MAP as CREDIT_ACCOUNTS, BANK_ACCOUNT_MAP, resolveAccounts } from "./chartOfAccounts";
 
 // === Storage keys ===
 const KEYS = {
@@ -88,58 +73,54 @@ const KEYS = {
 };
 
 // === Seed data ===
+import { classifyTransaction } from "./classificationRules";
+
 function generateTransactions(clientId: string): Transaction[] {
-  const baseData: Record<string, { descriptions: [string, number, string, string][] }> = {
-    c1: {
-      descriptions: [
-        ["PIX REC BOOKING.COM RESERVA", 4500, "credit", "Receita de Serviços"],
-        ["PIX REC DECOLAR HOSPEDAGEM", 3200, "credit", "Receita de Serviços"],
-        ["TED REC AGENCIA VIAGEM", 2800, "credit", "Receita de Vendas"],
-        ["PGTO FOLHA MAR/2026", -12500, "debit", "Folha de Pagamento"],
-        ["DAS SIMPLES NACIONAL", -3200, "debit", "Impostos e Tributos"],
-        ["PGTO FORNEC ALIMENTOS", -4800, "debit", "Fornecedores / Compras"],
-        ["ALUGUEL IMOVEL COMERCIAL", -8500, "debit", "Aluguel"],
-        ["PGTO CONTA LUZ ENEL", -1200, "debit", "Serviços Contratados"],
-        ["TARIFA BANCARIA MENSAL", -89.90, "debit", "Despesas Bancárias"],
-        ["PIX REC HOSPEDE DIRETO", 1500, "credit", "pending"],
-        ["TRANSF TED RECEBIDA", 2200, "credit", "pending"],
-        ["PGTO MANUTENCAO PISCINA", -950, "debit", "pending"],
-        ["DEB AUT SEGURO INCENDIO", -450, "debit", "pending"],
-        ["COMPRA CARTAO MATERIAL", -320, "debit", "pending"],
-      ],
-    },
-    c2: {
-      descriptions: [
-        ["PIX REC IFOOD REPASSE", 8500, "credit", "Receita de Vendas"],
-        ["PIX REC RAPPI REPASSE", 3200, "credit", "Receita de Vendas"],
-        ["VENDA CARTAO CREDITO", 12000, "credit", "Receita de Vendas"],
-        ["VENDA CARTAO DEBITO", 6500, "credit", "Receita de Vendas"],
-        ["PGTO FOLHA MAR/2026", -18000, "debit", "Folha de Pagamento"],
-        ["PGTO FORNEC HORTIFRUTI", -5600, "debit", "Fornecedores / Compras"],
-        ["PGTO FORNEC CARNES", -8200, "debit", "Fornecedores / Compras"],
-        ["ALUGUEL PONTO COMERCIAL", -6000, "debit", "Aluguel"],
-        ["PGTO GAS INDUSTRIAL", -1800, "debit", "Serviços Contratados"],
-        ["ISS RETIDO FONTE", -960, "debit", "Impostos e Tributos"],
-        ["TARIFA BANCARIA", -59.90, "debit", "Despesas Bancárias"],
-        ["PARCELA EMPREST CAPITAL", -2500, "debit", "Empréstimos e Financiamentos"],
-      ],
-    },
-    c3: {
-      descriptions: [
-        ["PIX REC VENDA PECAS", 15000, "credit", "Receita de Vendas"],
-        ["BOLETO REC CLIENTE PJ", 8500, "credit", "Receita de Vendas"],
-        ["TED REC VENDA ATACADO", 22000, "credit", "Receita de Vendas"],
-        ["PGTO FOLHA MAR/2026", -25000, "debit", "Folha de Pagamento"],
-        ["PGTO FORNEC AUTOPECAS", -35000, "debit", "Fornecedores / Compras"],
-        ["ICMS APURADO", -4800, "debit", "Impostos e Tributos"],
-        ["PIS/COFINS", -2100, "debit", "Impostos e Tributos"],
-        ["ALUGUEL GALPAO", -12000, "debit", "Aluguel"],
-        ["FRETE TRANSPORTADORA", -3500, "debit", "Serviços Contratados"],
-        ["TARIFA BANCARIA", -129.90, "debit", "Despesas Bancárias"],
-        ["PRO-LABORE SOCIOS", -15000, "debit", "Retiradas dos Sócios"],
-        ["PARCELA FINANCIAMENTO", -4500, "debit", "Empréstimos e Financiamentos"],
-      ],
-    },
+  const baseData: Record<string, [string, number, string][]> = {
+    c1: [
+      ["PIX REC BOOKING.COM RESERVA", 4500, "credit"],
+      ["PIX REC DECOLAR HOSPEDAGEM", 3200, "credit"],
+      ["TED REC AGENCIA VIAGEM", 2800, "credit"],
+      ["PGTO FOLHA MAR/2026", -12500, "debit"],
+      ["DAS SIMPLES NACIONAL", -3200, "debit"],
+      ["PGTO FORNEC ALIMENTOS", -4800, "debit"],
+      ["ALUGUEL IMOVEL COMERCIAL", -8500, "debit"],
+      ["PGTO CONTA LUZ ENEL", -1200, "debit"],
+      ["TARIFA BANCARIA MENSAL", -89.90, "debit"],
+      ["PIX REC HOSPEDE DIRETO", 1500, "credit"],
+      ["TRANSF TED RECEBIDA", 2200, "credit"],
+      ["PGTO MANUTENCAO PISCINA", -950, "debit"],
+      ["DEB AUT SEGURO INCENDIO", -450, "debit"],
+      ["COMPRA CARTAO MATERIAL", -320, "debit"],
+    ],
+    c2: [
+      ["PIX REC IFOOD REPASSE", 8500, "credit"],
+      ["PIX REC RAPPI REPASSE", 3200, "credit"],
+      ["VENDA CARTAO CREDITO", 12000, "credit"],
+      ["VENDA CARTAO DEBITO", 6500, "credit"],
+      ["PGTO FOLHA MAR/2026", -18000, "debit"],
+      ["PGTO FORNEC HORTIFRUTI", -5600, "debit"],
+      ["PGTO FORNEC CARNES", -8200, "debit"],
+      ["ALUGUEL PONTO COMERCIAL", -6000, "debit"],
+      ["PGTO GAS INDUSTRIAL", -1800, "debit"],
+      ["ISS RETIDO FONTE", -960, "debit"],
+      ["TARIFA BANCARIA", -59.90, "debit"],
+      ["PARCELA EMPREST CAPITAL", -2500, "debit"],
+    ],
+    c3: [
+      ["PIX REC VENDA PECAS", 15000, "credit"],
+      ["BOLETO REC CLIENTE PJ", 8500, "credit"],
+      ["TED REC VENDA ATACADO", 22000, "credit"],
+      ["PGTO FOLHA MAR/2026", -25000, "debit"],
+      ["PGTO FORNEC AUTOPECAS", -35000, "debit"],
+      ["ICMS APURADO", -4800, "debit"],
+      ["PIS/COFINS", -2100, "debit"],
+      ["ALUGUEL GALPAO", -12000, "debit"],
+      ["FRETE TRANSPORTADORA", -3500, "debit"],
+      ["TARIFA BANCARIA", -129.90, "debit"],
+      ["PRO-LABORE SOCIOS", -15000, "debit"],
+      ["PARCELA FINANCIAMENTO", -4500, "debit"],
+    ],
   };
 
   const data = baseData[clientId];
@@ -147,18 +128,23 @@ function generateTransactions(clientId: string): Transaction[] {
 
   const months = ["2025-10", "2025-11", "2025-12", "2026-01", "2026-02", "2026-03"];
 
-  return data.descriptions.map((item, i) => {
-    const [desc, amt, type, cat] = item;
+  return data.map((item, i) => {
+    const [desc, amt, type] = item;
+    const txType = type as "credit" | "debit";
     const monthIdx = i % months.length;
     const day = String(5 + (i * 3) % 25).padStart(2, "0");
+
+    const result = classifyTransaction(desc, txType);
+
     return {
       id: `${clientId}-t${i + 1}`,
       date: `${months[monthIdx]}-${day}`,
-      description: desc as string,
-      amount: Math.abs(amt as number),
-      type: type as "credit" | "debit",
-      category: cat === "pending" ? "" : (cat as string),
-      classifiedBy: cat === "pending" ? "pending" : "auto",
+      description: desc,
+      amount: Math.abs(amt),
+      type: txType,
+      category: result.auto ? result.category : "",
+      classifiedBy: result.auto ? "auto" as const : "pending" as const,
+      ruleId: result.auto ? result.ruleId : undefined,
       approved: clientId === "c3",
     };
   });

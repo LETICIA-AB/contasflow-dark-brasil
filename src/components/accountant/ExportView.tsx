@@ -1,5 +1,5 @@
 import type { Client } from "@/data/store";
-import { DEBIT_ACCOUNTS, CREDIT_ACCOUNTS, BANK_ACCOUNT } from "@/data/store";
+import { resolveAccounts } from "@/data/chartOfAccounts";
 
 interface Props {
   client: Client;
@@ -15,16 +15,7 @@ export default function ExportView({ client, onBack }: Props) {
     const complement = tx.description.slice(0, 30);
     const value = tx.amount.toFixed(2);
 
-    let debit = "";
-    let credit = "";
-
-    if (tx.type === "debit") {
-      debit = DEBIT_ACCOUNTS[tx.category] || "390001";
-      credit = BANK_ACCOUNT;
-    } else {
-      debit = BANK_ACCOUNT;
-      credit = CREDIT_ACCOUNTS[tx.category] || "410001";
-    }
+    const { debit, credit } = resolveAccounts(tx.category, tx.type, client.bank);
 
     return [dateStr, tx.category, complement, value, debit, credit, "1", "N", "", ""].join("\t");
   });

@@ -9,6 +9,8 @@ import ClientListView from "@/components/accountant/ClientListView";
 import AdminView from "@/components/accountant/AdminView";
 import ReviewView from "@/components/accountant/ReviewView";
 import ExportView from "@/components/accountant/ExportView";
+import RulesView from "@/components/accountant/RulesView";
+import AccountsView from "@/components/accountant/AccountsView";
 
 export default function Index() {
   const [session, setSession] = useState<Session>(null);
@@ -79,6 +81,8 @@ export default function Index() {
     if (session.type === "accountant") {
       switch (view) {
         case "clients": return <ClientListView clients={clients} onSelectClient={(id) => setReviewClientId(id)} />;
+        case "rules": return <RulesView />;
+        case "accounts": return <AccountsView />;
         case "admin": return <AdminView clients={clients} onUpdate={refresh} />;
       }
     }
