@@ -73,8 +73,7 @@ export default function Index() {
   const renderView = () => {
     if (session.type === "client" && currentClient) {
       switch (view) {
-        case "uploads": return <UploadsView client={currentClient} />;
-        case "classify": return <ClassifyView client={currentClient} onUpdate={refresh} />;
+        case "uploads": return <UploadsView client={currentClient} onUpdate={refresh} />;
         case "dashboard": return <DashboardView client={currentClient} />;
       }
     }
