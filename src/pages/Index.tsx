@@ -81,6 +81,8 @@ export default function Index() {
     if (session.type === "accountant") {
       switch (view) {
         case "clients": return <ClientListView clients={clients} onSelectClient={(id) => setReviewClientId(id)} />;
+        case "rules": return <RulesView />;
+        case "accounts": return <AccountsView />;
         case "admin": return <AdminView clients={clients} onUpdate={refresh} />;
       }
     }

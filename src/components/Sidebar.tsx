@@ -16,6 +16,8 @@ const clientTabs = [
 
 const accountantTabs = [
   { id: "clients", label: "Carteira", icon: "🏢" },
+  { id: "rules", label: "Regras IA", icon: "🤖" },
+  { id: "accounts", label: "Plano de Contas", icon: "📋" },
   { id: "admin", label: "Admin", icon: "⚙️" },
 ];
 
