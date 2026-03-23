@@ -7,6 +7,7 @@ export interface Transaction {
   type: "credit" | "debit";
   category: string;
   classifiedBy: "auto" | "client" | "accountant" | "pending";
+  ruleId?: string;
   approved: boolean;
 }
 
