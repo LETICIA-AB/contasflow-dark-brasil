@@ -1,5 +1,5 @@
 import type { Client } from "@/data/store";
-import { DEBIT_ACCOUNTS, CREDIT_ACCOUNTS, BANK_ACCOUNT } from "@/data/store";
+import { resolveAccounts } from "@/data/chartOfAccounts";
 
 interface Props {
   client: Client;
