@@ -43,7 +43,7 @@ export default function ReviewView({ client, onUpdate, onExport }: Props) {
 
   const badgeFor = (t: { classifiedBy: string; approved: boolean }) => {
     if (t.approved) return <span className="cf-badge-green">✓ Aprovado</span>;
-    if (t.classifiedBy === "auto") return <span className="cf-badge-accent">⚡ IA</span>;
+    if (t.classifiedBy === "auto") return <span className="cf-badge-accent">⚡ IA {t.ruleId ? `(${t.ruleId})` : ""}</span>;
     if (t.classifiedBy === "client") return <span className="cf-badge-blue">👤 Cliente</span>;
     if (t.classifiedBy === "accountant") return <span className="cf-badge-purple">✍ Contador</span>;
     return <span className="cf-badge-yellow">⏳ Pendente</span>;
