@@ -173,6 +173,8 @@ function seedClients(): Client[] {
       cnpj: "23.456.789/0001-01",
       regime: "Simples Nacional",
       bank: "Bradesco",
+      banks: ["Bradesco"],
+      chartOverrides: {},
       status: "review",
       transactions: generateTransactions("c2"),
     },
