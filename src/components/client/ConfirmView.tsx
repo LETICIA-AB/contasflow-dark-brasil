@@ -18,8 +18,6 @@ export default function ConfirmView({ client, onUpdate }: Props) {
 
   // Get AI/memory suggestions for pending transactions
   const getSuggestion = (tx: Transaction): string | null => {
-    // Check if classification rules have a suggestion
-    const { classifyTransaction } = require("@/data/classificationRules");
     const result = classifyTransaction(tx.description, tx.type);
     return result.auto ? result.category : null;
   };
