@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Session, Client } from "@/data/store";
 import { ThemeToggle } from "./ThemeToggle";
+import { Upload, CheckCircle, BarChart3, Lightbulb, Building2, LayoutDashboard, Bot, ClipboardList, Settings, LogOut, X } from "lucide-react";
 
 interface SidebarProps {
   session: Session;
@@ -13,18 +14,18 @@ interface SidebarProps {
 }
 
 const clientTabs = [
-  { id: "uploads", label: "Envios", icon: "📤" },
-  { id: "confirm", label: "Conferir", icon: "✅" },
-  { id: "dashboard", label: "Dashboard", icon: "📊" },
-  { id: "insights", label: "Insights", icon: "💡" },
+  { id: "uploads", label: "Envios", icon: Upload },
+  { id: "confirm", label: "Conferir", icon: CheckCircle },
+  { id: "dashboard", label: "Dashboard", icon: BarChart3 },
+  { id: "insights", label: "Insights", icon: Lightbulb },
 ];
 
 const accountantTabs = [
-  { id: "clients", label: "Carteira", icon: "🏢" },
-  { id: "panel", label: "Painel Geral", icon: "📊" },
-  { id: "rules", label: "Regras IA", icon: "🤖" },
-  { id: "accounts", label: "Plano de Contas", icon: "📋" },
-  { id: "admin", label: "Admin", icon: "⚙️" },
+  { id: "clients", label: "Carteira", icon: Building2 },
+  { id: "panel", label: "Painel Geral", icon: LayoutDashboard },
+  { id: "rules", label: "Regras IA", icon: Bot },
+  { id: "accounts", label: "Plano de Contas", icon: ClipboardList },
+  { id: "admin", label: "Admin", icon: Settings },
 ];
 
 export default function Sidebar({ session, client, activeView, onNavigate, onLogout, open, onClose }: SidebarProps) {
