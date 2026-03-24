@@ -187,9 +187,25 @@ export default function AdminView({ clients, onUpdate }: Props) {
     { id: "banks", label: "Bancos" },
   ] as const;
 
+  const handleResetData = () => {
+    if (!window.confirm("Tem certeza? Isso vai apagar TODOS os dados (empresas, usuários, extratos, bancos, memória) e recarregar a página.")) return;
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("cf-v3-")) keysToRemove.push(key);
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+    window.location.reload();
+  };
+
   return (
     <div className="space-y-6 cf-stagger">
-      <h2 className="text-2xl font-bold">Administração</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold">Administração</h2>
+        <button className="px-3 py-1.5 rounded-md text-xs font-medium bg-destructive/10 text-destructive border border-destructive/30 hover:bg-destructive/20 transition-colors" onClick={handleResetData}>
+          Resetar Dados
+        </button>
+      </div>
 
       <div className="flex gap-1 bg-card rounded-lg border border-border p-1 w-fit">
         {tabs.map((t) => (

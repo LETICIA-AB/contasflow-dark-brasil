@@ -1,6 +1,9 @@
 import { useState, useRef } from "react";
-import { type Client, type Upload, loadClients, saveClients, loadUploads, saveUploads, generateGenericTransactions } from "@/data/store";
+import { type Client, type Transaction, type Upload, loadClients, saveClients, loadUploads, saveUploads, generateGenericTransactions } from "@/data/store";
 import { addNotification } from "@/data/notificationStore";
+import { classifyTransaction } from "@/data/classificationRules";
+import { resolveAccounts } from "@/data/chartOfAccounts";
+import { parseOFX, parseCSV } from "@/data/fileParser";
 import { CheckCircle2, AlertTriangle, Lock, FolderUp, Clock } from "lucide-react";
 
 interface Props {
@@ -57,14 +60,25 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setProcessing(true);
-    setTimeout(() => {
+
+    const fileArray = Array.from(files);
+    const readers: Promise<{ file: File; content: string }>[] = fileArray.map(
+      (f) => new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve({ file: f, content: reader.result as string });
+        reader.onerror = () => resolve({ file: f, content: "" });
+        reader.readAsText(f);
+      })
+    );
+
+    Promise.all(readers).then((results) => {
       const allUploads = loadUploads();
-      const newUploads: Upload[] = Array.from(files).map((f, i) => ({
+      const newUploads: Upload[] = results.map(({ file }, i) => ({
         id: `up-${Date.now()}-${i}`,
         clientId: client.id,
-        filename: f.name,
+        filename: file.name,
         bank: client.bank.split(" ")[0],
-        size: f.size > 1024 * 1024 ? `${(f.size / 1024 / 1024).toFixed(1)} MB` : `${(f.size / 1024).toFixed(0)} KB`,
+        size: file.size > 1024 * 1024 ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : `${(file.size / 1024).toFixed(0)} KB`,
         date: new Date().toLocaleString("pt-BR"),
         period,
         status: "processado" as const,
@@ -73,31 +87,71 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
       saveUploads(updated);
       setUploads(updated.filter((u) => u.clientId === client.id));
 
-      // Generate transactions for the client if none exist for this period
+      // Parse real transactions from files
+      let allParsed: import("@/data/fileParser").ParsedTransaction[] = [];
+      for (const { file, content } of results) {
+        if (!content) continue;
+        const ext = file.name.toLowerCase().split(".").pop() || "";
+        if (ext === "ofx") {
+          allParsed = [...allParsed, ...parseOFX(content)];
+        } else if (ext === "csv" || ext === "txt") {
+          allParsed = [...allParsed, ...parseCSV(content)];
+        }
+      }
+
       const allClients = loadClients();
       const c = allClients.find((cl) => cl.id === client.id);
       if (c) {
-        const periodTransactions = c.transactions.filter((t) => {
+        if (allParsed.length > 0) {
+          // Convert parsed transactions to Transaction[] with classification
+          const newTxs: Transaction[] = allParsed.map((p, i) => {
+            const result = classifyTransaction(p.description, p.type);
+            const category = result.auto ? result.category : "";
+            let debitAccount = "";
+            let creditAccount = "";
+            if (result.auto) {
+              const accounts = resolveAccounts(result.category, p.type, client.bank);
+              debitAccount = accounts.debit;
+              creditAccount = accounts.credit;
+            }
+            return {
+              id: `${client.id}-t${Date.now()}-${i}`,
+              date: p.date,
+              description: p.description,
+              amount: p.amount,
+              type: p.type,
+              category,
+              classifiedBy: result.auto ? "auto" as const : "pending" as const,
+              ruleId: result.auto ? result.ruleId : undefined,
+              debitAccount,
+              creditAccount,
+              approved: false,
+            };
+          });
+          c.transactions = [...c.transactions, ...newTxs];
+        } else {
+          // Fallback: generate generic transactions if parser found nothing
           const monthMap: Record<string, string> = {
             "Jan": "01", "Fev": "02", "Mar": "03", "Abr": "04", "Mai": "05", "Jun": "06",
             "Jul": "07", "Ago": "08", "Set": "09", "Out": "10", "Nov": "11", "Dez": "12",
           };
           const [monthKey, year] = period.split("/");
           const prefix = `${year}-${monthMap[monthKey]}`;
-          return t.date.startsWith(prefix);
-        });
-        if (periodTransactions.length === 0) {
-          const newTxs = generateGenericTransactions(client.id, client.bank, period);
-          c.transactions = [...c.transactions, ...newTxs];
-          saveClients(allClients);
-          onUpdate();
+          const existing = c.transactions.filter((t) => t.date.startsWith(prefix));
+          if (existing.length === 0) {
+            const newTxs = generateGenericTransactions(client.id, client.bank, period);
+            c.transactions = [...c.transactions, ...newTxs];
+          }
         }
+        saveClients(allClients);
+        onUpdate();
       }
+
       setProcessing(false);
       if (onNavigate) {
         setTimeout(() => onNavigate("confirm"), 1000);
       }
-    }, 1500);
+    });
   };
 
   const handleSubmit = () => {
