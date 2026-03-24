@@ -203,7 +203,7 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
                 ⚠ Você tem {pending.length} transação(ões) pendente(s) de classificação.
               </p>
               <p className="text-cf-yellow/80 text-xs mt-1">
-                Classifique todas as transações na aba <strong>"Classificar"</strong> para concluir o envio deste período. Seu progresso é salvo automaticamente.
+                Classifique todas as transações na aba <strong>"Conferir"</strong> para concluir o envio deste período. Seu progresso é salvo automaticamente.
               </p>
             </div>
             <button className="cf-btn-secondary opacity-50 cursor-not-allowed" disabled>
