@@ -79,10 +79,6 @@ export default function AdminView({ clients, onUpdate }: Props) {
     refreshUsers();
   };
 
-  const toggleBank = (name: string) => {
-    setFormBanks((prev) => prev.includes(name) ? prev.filter((b) => b !== name) : [...prev, name]);
-  };
-
   const handleAddBank = () => {
     if (!newBankName.trim()) return;
     addBank(newBankName.trim(), newBankCode.trim());
