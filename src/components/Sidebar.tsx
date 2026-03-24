@@ -80,7 +80,7 @@ export default function Sidebar({ session, client, activeView, onNavigate, onLog
             onClick={onClose}
             className="lg:hidden text-muted-foreground hover:text-foreground transition-colors p-1"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
 
