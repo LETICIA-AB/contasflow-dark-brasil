@@ -162,6 +162,8 @@ function seedClients(): Client[] {
       cnpj: "12.345.678/0001-90",
       regime: "Lucro Presumido",
       bank: "Caixa Econômica Federal",
+      banks: ["Caixa Econômica Federal", "Banco do Brasil", "Sicoob"],
+      chartOverrides: {},
       status: "classify",
       transactions: generateTransactions("c1"),
     },
