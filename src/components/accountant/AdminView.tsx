@@ -42,8 +42,6 @@ export default function AdminView({ clients, onUpdate }: Props) {
     setFormCnpj(u.cnpj);
     setFormPassword(u.password);
     setFormClientId(u.clientId);
-    const c = clients.find((cl) => cl.id === u.clientId);
-    setFormBanks(c?.banks || []);
   };
 
   const handleSave = () => {
