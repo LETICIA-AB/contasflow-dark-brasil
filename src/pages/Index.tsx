@@ -3,8 +3,8 @@ import { loadClients, type Session, type Client } from "@/data/store";
 import Login from "@/components/Login";
 import Sidebar from "@/components/Sidebar";
 import UploadsView from "@/components/client/UploadsView";
-
 import DashboardView from "@/components/client/DashboardView";
+import InsightsView from "@/components/client/InsightsView";
 import ClientListView from "@/components/accountant/ClientListView";
 import AdminView from "@/components/accountant/AdminView";
 import ReviewView from "@/components/accountant/ReviewView";
@@ -41,7 +41,6 @@ export default function Index() {
     ? clients.find((c) => c.id === session.clientId) ?? null
     : null;
 
-  // Accountant review/export views
   if (session.type === "accountant" && exportClientId) {
     const expClient = clients.find((c) => c.id === exportClientId);
     if (expClient) {
@@ -75,6 +74,7 @@ export default function Index() {
       switch (view) {
         case "uploads": return <UploadsView client={currentClient} onUpdate={refresh} />;
         case "dashboard": return <DashboardView client={currentClient} />;
+        case "insights": return <InsightsView client={currentClient} />;
       }
     }
     if (session.type === "accountant") {
