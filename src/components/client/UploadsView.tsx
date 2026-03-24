@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { type Client, type Upload, loadClients, saveClients, loadUploads, saveUploads } from "@/data/store";
+import { addNotification } from "@/data/notificationStore";
 
 interface Props {
   client: Client;
@@ -79,6 +80,12 @@ export default function UploadsView({ client, onUpdate }: Props) {
     if (c) {
       c.status = "review";
       saveClients(allClients);
+      addNotification({
+        type: "submission",
+        clientId: client.id,
+        clientName: client.name,
+        message: `Concluiu o envio do período ${period}. ${total} transações classificadas e prontas para revisão.`,
+      });
       onUpdate();
       setSubmitted(true);
     }

@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { loadClients, type Session, type Client } from "@/data/store";
 import Login from "@/components/Login";
 import Sidebar from "@/components/Sidebar";
+import NotificationPanel from "@/components/NotificationPanel";
 import UploadsView from "@/components/client/UploadsView";
 import ClassifyView from "@/components/client/ClassifyView";
 import DashboardView from "@/components/client/DashboardView";
@@ -13,7 +14,7 @@ import ExportView from "@/components/accountant/ExportView";
 import RulesView from "@/components/accountant/RulesView";
 import AccountsView from "@/components/accountant/AccountsView";
 
-function MobileHeader({ onToggle }: { onToggle: () => void }) {
+function MobileHeader({ onToggle, isAccountant, onNavigateToClient }: { onToggle: () => void; isAccountant?: boolean; onNavigateToClient?: (id: string) => void }) {
   return (
     <header className="lg:hidden sticky top-0 z-30 h-14 flex items-center gap-3 px-4 border-b border-border/60 bg-background/95 backdrop-blur-sm">
       <button
@@ -27,7 +28,7 @@ function MobileHeader({ onToggle }: { onToggle: () => void }) {
           <line x1="3" y1="15" x2="17" y2="15" />
         </svg>
       </button>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-1">
         <div
           className="w-7 h-7 rounded-md flex items-center justify-center text-[10px] font-black text-primary-foreground font-heading"
           style={{ background: "var(--gradient-primary)" }}
@@ -39,6 +40,16 @@ function MobileHeader({ onToggle }: { onToggle: () => void }) {
           <span className="text-foreground">Flow</span>
         </span>
       </div>
+      {isAccountant && <NotificationPanel onNavigateToClient={onNavigateToClient} />}
+    </header>
+  );
+}
+
+function DesktopHeader({ isAccountant, onNavigateToClient }: { isAccountant?: boolean; onNavigateToClient?: (id: string) => void }) {
+  if (!isAccountant) return null;
+  return (
+    <header className="hidden lg:flex h-12 items-center justify-end px-6 border-b border-border/30">
+      <NotificationPanel onNavigateToClient={onNavigateToClient} />
     </header>
   );
 }
@@ -70,9 +81,15 @@ export default function Index() {
 
   if (!session) return <Login onLogin={handleLogin} />;
 
+  const isAccountant = session.type === "accountant";
   const currentClient = session.type === "client"
     ? clients.find((c) => c.id === session.clientId) ?? null
     : null;
+
+  const handleNotificationNav = (clientId: string) => {
+    setReviewClientId(clientId);
+    setView("clients");
+  };
 
   const sidebarProps = {
     session,
@@ -83,14 +100,21 @@ export default function Index() {
     onClose: () => setSidebarOpen(false),
   };
 
-  if (session.type === "accountant" && exportClientId) {
+  const headerProps = {
+    onToggle: () => setSidebarOpen(true),
+    isAccountant,
+    onNavigateToClient: handleNotificationNav,
+  };
+
+  if (isAccountant && exportClientId) {
     const expClient = clients.find((c) => c.id === exportClientId);
     if (expClient) {
       return (
         <div className="flex h-screen overflow-hidden">
           <Sidebar {...sidebarProps} activeView="clients" onNavigate={(v) => { setExportClientId(null); setReviewClientId(null); setView(v); }} />
           <div className="flex-1 flex flex-col overflow-hidden">
-            <MobileHeader onToggle={() => setSidebarOpen(true)} />
+            <MobileHeader {...headerProps} />
+            <DesktopHeader isAccountant onNavigateToClient={handleNotificationNav} />
             <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
               <ExportView client={expClient} onBack={() => setExportClientId(null)} />
             </main>
@@ -100,14 +124,15 @@ export default function Index() {
     }
   }
 
-  if (session.type === "accountant" && reviewClientId) {
+  if (isAccountant && reviewClientId) {
     const revClient = clients.find((c) => c.id === reviewClientId);
     if (revClient) {
       return (
         <div className="flex h-screen overflow-hidden">
           <Sidebar {...sidebarProps} activeView="clients" onNavigate={(v) => { setReviewClientId(null); setView(v); }} />
           <div className="flex-1 flex flex-col overflow-hidden">
-            <MobileHeader onToggle={() => setSidebarOpen(true)} />
+            <MobileHeader {...headerProps} />
+            <DesktopHeader isAccountant onNavigateToClient={handleNotificationNav} />
             <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
               <ReviewView client={revClient} onUpdate={refresh} onExport={(id) => setExportClientId(id)} />
             </main>
@@ -126,7 +151,7 @@ export default function Index() {
         case "insights": return <InsightsView client={currentClient} />;
       }
     }
-    if (session.type === "accountant") {
+    if (isAccountant) {
       switch (view) {
         case "clients": return <ClientListView clients={clients} onSelectClient={(id) => setReviewClientId(id)} />;
         case "rules": return <RulesView />;
@@ -141,7 +166,8 @@ export default function Index() {
     <div className="flex h-screen overflow-hidden">
       <Sidebar {...sidebarProps} onNavigate={setView} />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <MobileHeader onToggle={() => setSidebarOpen(true)} />
+        <MobileHeader {...headerProps} />
+        <DesktopHeader isAccountant={isAccountant} onNavigateToClient={handleNotificationNav} />
         <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
           {renderView()}
         </main>
