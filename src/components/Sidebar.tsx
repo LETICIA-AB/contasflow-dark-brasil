@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Session, Client } from "@/data/store";
+import { ThemeToggle } from "./ThemeToggle";
 
 interface SidebarProps {
   session: Session;
