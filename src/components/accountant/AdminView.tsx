@@ -235,18 +235,6 @@ export default function AdminView({ clients, onUpdate }: Props) {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm text-muted-foreground mb-2">Bancos utilizados</label>
-                <div className="flex flex-wrap gap-2">
-                  {banks.filter((b) => b.active).map((b) => (
-                    <label key={b.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all border ${formBanks.includes(b.name) ? "bg-primary/15 border-primary/40 text-primary" : "bg-secondary border-border text-muted-foreground hover:text-foreground"}`}>
-                      <input type="checkbox" className="sr-only" checked={formBanks.includes(b.name)} onChange={() => toggleBank(b.name)} />
-                      {b.name}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
               <div className="flex gap-3">
                 <button className="cf-btn-primary" onClick={handleSave} disabled={!formClientId || !formCnpj || !formPassword}>Salvar</button>
                 <button className="cf-btn-secondary" onClick={() => setEditing(null)}>Cancelar</button>
