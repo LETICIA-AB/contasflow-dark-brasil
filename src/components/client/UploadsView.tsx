@@ -33,6 +33,7 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
   const [uploads, setUploads] = useState<Upload[]>(() => loadUploads().filter((u) => u.clientId === client.id));
   const [period, setPeriod] = useState("Mar/2026");
   const [dragging, setDragging] = useState(false);
+  const [parseError, setParseError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [expandedUploadId, setExpandedUploadId] = useState<string | null>(null);
