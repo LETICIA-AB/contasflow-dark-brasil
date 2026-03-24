@@ -6,8 +6,10 @@ export interface Transaction {
   amount: number;
   type: "credit" | "debit";
   category: string;
-  classifiedBy: "auto" | "client" | "accountant" | "pending";
+  classifiedBy: "auto" | "client" | "accountant" | "memory" | "pending";
   ruleId?: string;
+  debitAccount?: string;
+  creditAccount?: string;
   approved: boolean;
 }
 
@@ -17,6 +19,8 @@ export interface Client {
   cnpj: string;
   regime: string;
   bank: string;
+  banks: string[];
+  chartOverrides: Record<string, { debit: string; credit: string }>;
   status: "classify" | "review" | "approved";
   transactions: Transaction[];
 }
@@ -158,6 +162,8 @@ function seedClients(): Client[] {
       cnpj: "12.345.678/0001-90",
       regime: "Lucro Presumido",
       bank: "Caixa Econômica Federal",
+      banks: ["Caixa Econômica Federal", "Banco do Brasil", "Sicoob"],
+      chartOverrides: {},
       status: "classify",
       transactions: generateTransactions("c1"),
     },
@@ -167,6 +173,8 @@ function seedClients(): Client[] {
       cnpj: "23.456.789/0001-01",
       regime: "Simples Nacional",
       bank: "Bradesco",
+      banks: ["Bradesco"],
+      chartOverrides: {},
       status: "review",
       transactions: generateTransactions("c2"),
     },
@@ -176,6 +184,8 @@ function seedClients(): Client[] {
       cnpj: "34.567.890/0001-12",
       regime: "Lucro Real",
       bank: "Itaú Unibanco",
+      banks: ["Itaú Unibanco", "Banco do Brasil"],
+      chartOverrides: {},
       status: "approved",
       transactions: generateTransactions("c3"),
     },

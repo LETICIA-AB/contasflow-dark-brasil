@@ -168,8 +168,14 @@ export const CATEGORY_CREDIT_MAP: Record<string, string> = {
 export function resolveAccounts(
   category: string,
   txType: "credit" | "debit",
-  bankName: string
+  bankName: string,
+  chartOverrides?: Record<string, { debit: string; credit: string }>
 ): { debit: string; credit: string } {
+  // Check overrides first
+  if (chartOverrides && chartOverrides[category]) {
+    return chartOverrides[category];
+  }
+
   const bankAccount = BANK_ACCOUNT_MAP[bankName] || "111001";
 
   if (txType === "debit") {

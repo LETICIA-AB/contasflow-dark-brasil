@@ -88,7 +88,6 @@ export function classifyTransaction(
   type: "credit" | "debit"
 ): ClassificationResult | { auto: false } {
   const typeCode = type === "debit" ? "D" : "C";
-
   const sorted = [...CLASSIFICATION_RULES].sort((a, b) => a.priority - b.priority);
 
   for (const rule of sorted) {
@@ -99,4 +98,65 @@ export function classifyTransaction(
   }
 
   return { auto: false };
+}
+
+// Full classification with memory lookup + account resolution
+import { findInMemory, saveToMemory } from "./memoryStore";
+import { resolveAccounts } from "./chartOfAccounts";
+import type { Client } from "./store";
+
+export interface FullClassificationResult {
+  category: string;
+  classifiedBy: "memory" | "auto" | "pending";
+  ruleId?: string;
+  debitAccount: string;
+  creditAccount: string;
+}
+
+export function classifyWithMemory(
+  desc: string,
+  type: "credit" | "debit",
+  client: Client
+): FullClassificationResult {
+  // 1. Check memory
+  const mem = findInMemory(desc, client.id);
+  if (mem) {
+    return {
+      category: mem.category,
+      classifiedBy: "memory",
+      debitAccount: mem.debitAccount,
+      creditAccount: mem.creditAccount,
+    };
+  }
+
+  // 2. Check regex rules
+  const result = classifyTransaction(desc, type);
+  if (result.auto) {
+    const accounts = resolveAccounts(result.category, type, client.bank, client.chartOverrides);
+    return {
+      category: result.category,
+      classifiedBy: "auto",
+      ruleId: result.ruleId,
+      debitAccount: accounts.debit,
+      creditAccount: accounts.credit,
+    };
+  }
+
+  // 3. Pending
+  return {
+    category: "",
+    classifiedBy: "pending",
+    debitAccount: "",
+    creditAccount: "",
+  };
+}
+
+export function recordClassification(
+  desc: string,
+  category: string,
+  type: "credit" | "debit",
+  client: Client
+) {
+  const accounts = resolveAccounts(category, type, client.bank, client.chartOverrides);
+  saveToMemory(desc, category, accounts.debit, accounts.credit, client.id);
 }

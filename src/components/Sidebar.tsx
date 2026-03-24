@@ -11,6 +11,7 @@ interface SidebarProps {
 const clientTabs = [
   { id: "uploads", label: "Extratos", icon: "📄" },
   { id: "dashboard", label: "Dashboard", icon: "📊" },
+  { id: "insights", label: "Insights", icon: "💡" },
 ];
 
 const accountantTabs = [
@@ -29,7 +30,6 @@ export default function Sidebar({ session, client, activeView, onNavigate, onLog
 
   return (
     <aside className="w-64 h-screen bg-card border-r border-border flex flex-col shrink-0">
-      {/* Brand */}
       <div className="p-5 border-b border-border">
         <h2 className="text-xl font-bold tracking-tight">
           <span className="text-primary">Contas</span>
@@ -37,13 +37,11 @@ export default function Sidebar({ session, client, activeView, onNavigate, onLog
         </h2>
       </div>
 
-      {/* User info */}
       <div className="p-5 border-b border-border">
         <p className="text-sm font-semibold text-foreground truncate">{title}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 p-3 space-y-1">
         {tabs.map((tab) => (
           <button
@@ -61,14 +59,8 @@ export default function Sidebar({ session, client, activeView, onNavigate, onLog
         ))}
       </nav>
 
-      {/* Logout */}
       <div className="p-4 border-t border-border">
-        <button
-          onClick={onLogout}
-          className="cf-btn-ghost w-full text-sm justify-start"
-        >
-          ← Sair
-        </button>
+        <button onClick={onLogout} className="cf-btn-ghost w-full text-sm justify-start">← Sair</button>
       </div>
     </aside>
   );
