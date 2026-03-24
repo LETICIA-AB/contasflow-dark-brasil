@@ -6,50 +6,59 @@
 
 @layer base {
   :root {
-    --background: 222 36% 3.5%;
-    --foreground: 214 32% 95.1%;
+    --background: 225 40% 4%;
+    --foreground: 210 30% 94%;
 
-    --card: 215 38% 9.4%;
-    --card-foreground: 214 32% 95.1%;
+    --card: 220 35% 8%;
+    --card-foreground: 210 30% 94%;
 
-    --popover: 215 38% 9.4%;
-    --popover-foreground: 214 32% 95.1%;
+    --popover: 220 35% 8%;
+    --popover-foreground: 210 30% 94%;
 
-    --primary: 165 100% 41.6%;
-    --primary-foreground: 222 36% 3.5%;
+    --primary: 165 80% 44%;
+    --primary-foreground: 225 40% 4%;
 
-    --secondary: 213 34% 15.7%;
-    --secondary-foreground: 214 32% 95.1%;
+    --secondary: 220 30% 14%;
+    --secondary-foreground: 210 30% 94%;
 
-    --muted: 213 34% 15.7%;
-    --muted-foreground: 213 24% 47.1%;
+    --muted: 220 25% 16%;
+    --muted-foreground: 215 20% 50%;
 
-    --accent: 165 100% 41.6%;
-    --accent-foreground: 222 36% 3.5%;
+    --accent: 165 80% 44%;
+    --accent-foreground: 225 40% 4%;
 
-    --destructive: 0 94% 71%;
-    --destructive-foreground: 222 36% 3.5%;
+    --destructive: 0 72% 60%;
+    --destructive-foreground: 225 40% 4%;
 
-    --border: 213 34% 15.7%;
-    --input: 213 34% 15.7%;
-    --ring: 165 100% 41.6%;
+    --border: 220 25% 14%;
+    --input: 220 25% 14%;
+    --ring: 165 80% 44%;
 
     --radius: 0.75rem;
 
-    --cf-green: 160 65% 50.4%;
-    --cf-red: 0 94% 71%;
-    --cf-yellow: 43 96% 56.1%;
-    --cf-blue: 217 93% 68%;
-    --cf-purple: 255 91% 76.3%;
+    --cf-green: 160 60% 48%;
+    --cf-red: 0 72% 60%;
+    --cf-yellow: 40 90% 56%;
+    --cf-blue: 215 85% 62%;
+    --cf-purple: 260 70% 68%;
 
-    --sidebar-background: 215 38% 7%;
-    --sidebar-foreground: 214 32% 95.1%;
-    --sidebar-primary: 165 100% 41.6%;
-    --sidebar-primary-foreground: 222 36% 3.5%;
-    --sidebar-accent: 213 34% 15.7%;
-    --sidebar-accent-foreground: 214 32% 95.1%;
-    --sidebar-border: 213 34% 15.7%;
-    --sidebar-ring: 165 100% 41.6%;
+    --sidebar-background: 222 38% 6%;
+    --sidebar-foreground: 210 30% 94%;
+    --sidebar-primary: 165 80% 44%;
+    --sidebar-primary-foreground: 225 40% 4%;
+    --sidebar-accent: 220 30% 14%;
+    --sidebar-accent-foreground: 210 30% 94%;
+    --sidebar-border: 220 25% 12%;
+    --sidebar-ring: 165 80% 44%;
+
+    /* Custom design tokens */
+    --glow-primary: 0 0 20px hsl(165 80% 44% / 0.15);
+    --glow-primary-strong: 0 0 40px hsl(165 80% 44% / 0.2), 0 0 80px hsl(165 80% 44% / 0.05);
+    --shadow-card: 0 1px 3px hsl(0 0% 0% / 0.3), 0 4px 12px hsl(0 0% 0% / 0.15);
+    --shadow-elevated: 0 4px 16px hsl(0 0% 0% / 0.4), 0 8px 32px hsl(0 0% 0% / 0.2);
+    --gradient-primary: linear-gradient(135deg, hsl(165 80% 44%), hsl(175 70% 38%));
+    --gradient-surface: linear-gradient(180deg, hsl(220 35% 9%) 0%, hsl(220 35% 7%) 100%);
+    --gradient-glow: radial-gradient(ellipse at 50% 0%, hsl(165 80% 44% / 0.08) 0%, transparent 60%);
   }
 }
 
@@ -60,64 +69,134 @@
 
   body {
     @apply bg-background text-foreground font-body antialiased;
+    background-image: radial-gradient(ellipse 80% 50% at 50% -20%, hsl(165 80% 44% / 0.03), transparent),
+                       radial-gradient(ellipse 60% 40% at 80% 80%, hsl(260 70% 68% / 0.02), transparent);
   }
 
   h1, h2, h3, h4, h5, h6 {
     @apply font-heading;
   }
+
+  /* Smooth scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted));
+    border-radius: 99px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
 }
 
 @layer components {
   .cf-card {
-    @apply bg-card border border-border rounded-xl p-5;
+    @apply bg-card border border-border rounded-xl p-5 transition-all duration-200;
+    box-shadow: var(--shadow-card);
+    background-image: var(--gradient-surface);
+  }
+
+  .cf-card:hover {
+    border-color: hsl(var(--border) / 0.8);
   }
 
   .cf-badge {
-    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium;
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold tracking-wide;
+    backdrop-filter: blur(8px);
   }
 
   .cf-badge-green {
-    @apply cf-badge bg-cf-green/15 text-cf-green;
+    @apply cf-badge;
+    background: hsl(var(--cf-green) / 0.12);
+    color: hsl(var(--cf-green));
+    border: 1px solid hsl(var(--cf-green) / 0.2);
   }
 
   .cf-badge-red {
-    @apply cf-badge bg-cf-red/15 text-cf-red;
+    @apply cf-badge;
+    background: hsl(var(--cf-red) / 0.12);
+    color: hsl(var(--cf-red));
+    border: 1px solid hsl(var(--cf-red) / 0.2);
   }
 
   .cf-badge-yellow {
-    @apply cf-badge bg-cf-yellow/15 text-cf-yellow;
+    @apply cf-badge;
+    background: hsl(var(--cf-yellow) / 0.12);
+    color: hsl(var(--cf-yellow));
+    border: 1px solid hsl(var(--cf-yellow) / 0.2);
   }
 
   .cf-badge-blue {
-    @apply cf-badge bg-cf-blue/15 text-cf-blue;
+    @apply cf-badge;
+    background: hsl(var(--cf-blue) / 0.12);
+    color: hsl(var(--cf-blue));
+    border: 1px solid hsl(var(--cf-blue) / 0.2);
   }
 
   .cf-badge-purple {
-    @apply cf-badge bg-cf-purple/15 text-cf-purple;
+    @apply cf-badge;
+    background: hsl(var(--cf-purple) / 0.12);
+    color: hsl(var(--cf-purple));
+    border: 1px solid hsl(var(--cf-purple) / 0.2);
   }
 
   .cf-badge-accent {
-    @apply cf-badge bg-primary/15 text-primary;
+    @apply cf-badge;
+    background: hsl(var(--primary) / 0.12);
+    color: hsl(var(--primary));
+    border: 1px solid hsl(var(--primary) / 0.2);
   }
 
   .cf-btn {
-    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed;
   }
 
   .cf-btn-primary {
-    @apply cf-btn bg-primary text-primary-foreground hover:brightness-110;
+    @apply cf-btn text-primary-foreground relative overflow-hidden;
+    background: var(--gradient-primary);
+    box-shadow: 0 2px 8px hsl(165 80% 44% / 0.25), inset 0 1px 0 hsl(0 0% 100% / 0.1);
+  }
+
+  .cf-btn-primary:hover {
+    box-shadow: 0 4px 16px hsl(165 80% 44% / 0.35), inset 0 1px 0 hsl(0 0% 100% / 0.15);
+    transform: translateY(-1px);
+  }
+
+  .cf-btn-primary:active {
+    transform: translateY(0);
   }
 
   .cf-btn-secondary {
-    @apply cf-btn bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border;
+    @apply cf-btn bg-secondary text-secondary-foreground border border-border;
+  }
+
+  .cf-btn-secondary:hover {
+    @apply bg-secondary/80;
+    border-color: hsl(var(--muted-foreground) / 0.3);
   }
 
   .cf-btn-ghost {
-    @apply cf-btn text-muted-foreground hover:text-foreground hover:bg-secondary/50;
+    @apply cf-btn text-muted-foreground;
+  }
+
+  .cf-btn-ghost:hover {
+    @apply text-foreground;
+    background: hsl(var(--secondary) / 0.5);
   }
 
   .cf-input {
-    @apply w-full bg-background border border-border rounded-lg px-4 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/60 transition-all text-sm;
+    @apply w-full bg-background/80 border border-border rounded-lg px-4 py-2.5 text-foreground placeholder:text-muted-foreground/60 transition-all text-sm;
+    backdrop-filter: blur(4px);
+  }
+
+  .cf-input:focus {
+    @apply outline-none border-primary/50;
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.1), var(--glow-primary);
   }
 
   .cf-select {
@@ -129,14 +208,18 @@
   }
 
   .cf-table th {
-    @apply text-left text-muted-foreground font-medium px-4 py-3 border-b border-border text-xs uppercase tracking-wider;
+    @apply text-left text-muted-foreground font-semibold px-4 py-3.5 border-b border-border text-[11px] uppercase tracking-widest;
   }
 
   .cf-table td {
-    @apply px-4 py-3 border-b border-border/50;
+    @apply px-4 py-3.5 border-b border-border/40;
   }
 
-  .cf-table tr:hover td {
-    @apply bg-secondary/30;
+  .cf-table tr {
+    @apply transition-colors duration-150;
+  }
+
+  .cf-table tbody tr:hover td {
+    background: hsl(var(--secondary) / 0.25);
   }
 }
