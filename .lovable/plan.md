@@ -1,22 +1,38 @@
 
 
-## Expandir Transações no Histórico de Envios
+## "Outros" com Descrição do Cliente + Memória Automática
 
 ### O que será feito
-Tornar cada linha do histórico de envios clicável. Ao clicar, expande uma seção abaixo mostrando todas as transações daquele período com: descrição, data, valor, classificação, conta débito/crédito e status (auto/pendente/cliente).
+Quando o cliente selecionar a categoria **"Outros"** na classificação de uma transação, um campo de texto aparece para ele descrever o que foi aquela movimentação. Essa descrição é salva na memória, e nos próximos extratos do mesmo banco, transações com descrição similar serão automaticamente classificadas como "Outros" com a mesma descrição do cliente.
+
+### Como funciona
+
+```text
+Cliente seleciona "Outros"
+       ↓
+Campo de texto aparece: "Descreva essa movimentação"
+       ↓
+Cliente digita (ex: "Reembolso de viagem do sócio")
+       ↓
+Salva na memória com: categoria "Outros" + clientDescription
+       ↓
+Próximo extrato → mesma descrição bancária → auto-classifica como "Outros"
+       com a descrição do cliente já preenchida
+```
 
 ### Mudanças técnicas
 
-**UploadsView.tsx**
-1. Adicionar state `expandedUploadId` para controlar qual upload está expandido
-2. Tornar cada `<tr>` do histórico clicável (cursor pointer, chevron icon)
-3. Ao clicar, filtrar `client.transactions` pelo período do upload selecionado
-4. Renderizar uma linha extra abaixo com tabela de transações contendo:
-   - Data | Descrição | Valor | Tipo (C/D) | Classificação | Conta Débito | Conta Crédito | Status (badge auto/pendente/cliente)
-5. Importar `ChevronDown`/`ChevronRight` do lucide-react para indicar estado expandido
-6. Badges coloridos para status: verde (auto), amarelo (pendente), azul (cliente)
+**`src/data/store.ts`**
+- Adicionar campo `clientDescription?: string` ao type `Transaction`
 
-### Resultado
-- Clique no arquivo → vê todas as transações extraídas daquele período
-- Visualização rápida sem sair da aba de envios
+**`src/data/memoryStore.ts`**
+- Adicionar campo `clientDescription?: string` ao type `ClassificationMemory`
+- Atualizar `saveToMemory` para aceitar e salvar `clientDescription`
+
+**`src/components/client/ClassifyView.tsx`**
+- Adicionar state `othersInput: Record<string, string>` para armazenar texto por transação
+- Quando o select muda para "Outros", mostrar um `<Textarea>` abaixo com placeholder "Descreva o que foi essa movimentação..."
+- Adicionar botão "Confirmar" que só aparece quando categoria é "Outros" e texto foi preenchido
+- No `handleClassify`: se categoria === "Outros", salvar `clientDescription` na transação e na memória via `saveToMemory` com o campo extra
+- Para transações auto-classificadas como "Outros" (vindas da memória), exibir a `clientDescription` na tabela como tooltip ou texto secundário
 
