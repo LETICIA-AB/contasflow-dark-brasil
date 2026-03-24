@@ -64,7 +64,7 @@ export default function Login({ onLogin }: LoginProps) {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.15, duration: 0.5 }}
         >
-          <img src={logoSrc} alt="ContasFlow" width={72} height={72} className="mb-4 drop-shadow-lg" />
+          <img src={logoSrc} alt="ContasFlow" width={72} height={72} className="mx-auto mb-4 drop-shadow-lg" />
           <h1 className="text-4xl font-bold tracking-tight">
             <span className="text-primary">Contas</span>
             <span className="text-foreground">Flow</span>

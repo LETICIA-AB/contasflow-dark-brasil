@@ -65,12 +65,7 @@ export default function Sidebar({ session, client, activeView, onNavigate, onLog
         {/* Brand */}
         <div className="p-5 border-b border-border/50 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div
-              className="w-9 h-9 rounded-lg flex items-center justify-center text-xs font-black text-primary-foreground font-heading"
-              style={{ background: "var(--gradient-primary)", boxShadow: "var(--glow-primary)" }}
-            >
-              CF
-            </div>
+            <img src={logoSrc} alt="ContasFlow" width={36} height={36} className="drop-shadow-md" />
             <h2 className="text-lg font-bold tracking-tight">
               <span className="text-primary">Contas</span>
               <span className="text-foreground">Flow</span>
