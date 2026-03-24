@@ -6,8 +6,10 @@ export interface Transaction {
   amount: number;
   type: "credit" | "debit";
   category: string;
-  classifiedBy: "auto" | "client" | "accountant" | "pending";
+  classifiedBy: "auto" | "client" | "accountant" | "memory" | "pending";
   ruleId?: string;
+  debitAccount?: string;
+  creditAccount?: string;
   approved: boolean;
 }
 
