@@ -72,6 +72,10 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
       saveUploads(updated);
       setUploads(updated.filter((u) => u.clientId === client.id));
       setProcessing(false);
+      // Auto-redirect to confirm view after upload
+      if (onNavigate) {
+        setTimeout(() => onNavigate("confirm"), 1000);
+      }
     }, 1500);
   };
 
