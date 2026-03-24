@@ -5,6 +5,7 @@ import { addNotification } from "@/data/notificationStore";
 interface Props {
   client: Client;
   onUpdate: () => void;
+  onNavigate?: (view: string) => void;
 }
 
 const MONTHS = [
