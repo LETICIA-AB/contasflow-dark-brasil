@@ -8,7 +8,7 @@ interface Props {
 }
 
 export default function AdminView({ clients, onUpdate }: Props) {
-  const [subTab, setSubTab] = useState<"users" | "uploads" | "banks">("users");
+  const [subTab, setSubTab] = useState<"users" | "clients" | "uploads" | "banks">("users");
   const [users, setUsers] = useState<User[]>(loadUsers);
   const [uploads] = useState<Upload[]>(loadUploads);
   const [editing, setEditing] = useState<string | null>(null);
@@ -19,6 +19,14 @@ export default function AdminView({ clients, onUpdate }: Props) {
   const [banks, setBanks] = useState<BankEntry[]>(loadBanks);
   const [newBankName, setNewBankName] = useState("");
   const [newBankCode, setNewBankCode] = useState("");
+
+  // Client (Empresa) form state
+  const [editingClient, setEditingClient] = useState<string | null>(null);
+  const [clientFormName, setClientFormName] = useState("");
+  const [clientFormCnpj, setClientFormCnpj] = useState("");
+  const [clientFormRegime, setClientFormRegime] = useState("Simples Nacional");
+  const [clientFormBank, setClientFormBank] = useState("");
+  const [clientFormBanks, setClientFormBanks] = useState<string[]>([]);
 
   const refreshUsers = () => setUsers(loadUsers());
 
@@ -112,8 +120,73 @@ export default function AdminView({ clients, onUpdate }: Props) {
     if (c) { setFormCnpj(c.cnpj); setFormBanks(c.banks || []); }
   };
 
+  // === Client CRUD ===
+  const startCreateClient = () => {
+    setEditingClient("new");
+    setClientFormName("");
+    setClientFormCnpj("");
+    setClientFormRegime("Simples Nacional");
+    setClientFormBank("");
+    setClientFormBanks([]);
+  };
+
+  const startEditClient = (c: Client) => {
+    setEditingClient(c.id);
+    setClientFormName(c.name);
+    setClientFormCnpj(c.cnpj);
+    setClientFormRegime(c.regime);
+    setClientFormBank(c.bank);
+    setClientFormBanks(c.banks);
+  };
+
+  const handleSaveClient = () => {
+    const allClients = loadClients();
+    if (editingClient === "new") {
+      const newClient: Client = {
+        id: `c-${Date.now()}`,
+        name: clientFormName.trim(),
+        cnpj: clientFormCnpj,
+        regime: clientFormRegime,
+        bank: clientFormBank || clientFormBanks[0] || "",
+        banks: clientFormBanks,
+        chartOverrides: {},
+        status: "classify",
+        transactions: [],
+      };
+      allClients.push(newClient);
+    } else {
+      const c = allClients.find((x) => x.id === editingClient);
+      if (c) {
+        c.name = clientFormName.trim();
+        c.cnpj = clientFormCnpj;
+        c.regime = clientFormRegime;
+        c.bank = clientFormBank || clientFormBanks[0] || "";
+        c.banks = clientFormBanks;
+      }
+    }
+    saveClients(allClients);
+    setEditingClient(null);
+    onUpdate();
+  };
+
+  const deleteClient = (clientId: string) => {
+    if (!window.confirm("Excluir esta empresa e todos os dados associados?")) return;
+    const allClients = loadClients().filter((c) => c.id !== clientId);
+    saveClients(allClients);
+    // Also remove associated users
+    const allUsers = loadUsers().filter((u) => u.clientId !== clientId);
+    saveUsers(allUsers);
+    refreshUsers();
+    onUpdate();
+  };
+
+  const toggleClientBank = (name: string) => {
+    setClientFormBanks((prev) => prev.includes(name) ? prev.filter((b) => b !== name) : [...prev, name]);
+  };
+
   const tabs = [
     { id: "users", label: "Usuários" },
+    { id: "clients", label: "Empresas" },
     { id: "uploads", label: "Extratos" },
     { id: "banks", label: "Bancos" },
   ] as const;
@@ -214,6 +287,104 @@ export default function AdminView({ clients, onUpdate }: Props) {
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CLIENTS (EMPRESAS) ── */}
+      {subTab === "clients" && (
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <button className="cf-btn-primary" onClick={startCreateClient}>+ Nova empresa</button>
+          </div>
+
+          {editingClient && (
+            <div className="cf-card space-y-4 border-primary/30">
+              <h3 className="font-semibold">{editingClient === "new" ? "Nova empresa" : "Editar empresa"}</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm text-muted-foreground mb-1">Nome da empresa</label>
+                  <input className="cf-input" value={clientFormName} onChange={(e) => setClientFormName(e.target.value)} placeholder="Ex: Restaurante Bom Sabor Ltda" />
+                </div>
+                <div>
+                  <label className="block text-sm text-muted-foreground mb-1">CNPJ</label>
+                  <input className="cf-input" value={clientFormCnpj} onChange={(e) => setClientFormCnpj(formatCNPJ(e.target.value))} maxLength={18} placeholder="00.000.000/0000-00" />
+                </div>
+                <div>
+                  <label className="block text-sm text-muted-foreground mb-1">Regime tributário</label>
+                  <select className="cf-select" value={clientFormRegime} onChange={(e) => setClientFormRegime(e.target.value)}>
+                    <option value="Simples Nacional">Simples Nacional</option>
+                    <option value="Lucro Presumido">Lucro Presumido</option>
+                    <option value="Lucro Real">Lucro Real</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm text-muted-foreground mb-1">Banco principal</label>
+                <select className="cf-select" value={clientFormBank} onChange={(e) => setClientFormBank(e.target.value)}>
+                  <option value="">Selecionar...</option>
+                  {banks.filter((b) => b.active).map((b) => (
+                    <option key={b.id} value={b.name}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm text-muted-foreground mb-2">Bancos utilizados</label>
+                <div className="flex flex-wrap gap-2">
+                  {banks.filter((b) => b.active).map((b) => (
+                    <label key={b.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all border ${clientFormBanks.includes(b.name) ? "bg-primary/15 border-primary/40 text-primary" : "bg-secondary border-border text-muted-foreground hover:text-foreground"}`}>
+                      <input type="checkbox" className="sr-only" checked={clientFormBanks.includes(b.name)} onChange={() => toggleClientBank(b.name)} />
+                      {b.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button className="cf-btn-primary" onClick={handleSaveClient} disabled={!clientFormName.trim() || !clientFormCnpj}>Salvar</button>
+                <button className="cf-btn-secondary" onClick={() => setEditingClient(null)}>Cancelar</button>
+              </div>
+            </div>
+          )}
+
+          <div className="cf-card p-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="cf-table">
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>CNPJ</th>
+                    <th>Regime</th>
+                    <th>Bancos</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clients.map((c) => (
+                    <tr key={c.id}>
+                      <td className="font-medium">{c.name}</td>
+                      <td className="font-heading">{c.cnpj}</td>
+                      <td className="text-sm">{c.regime}</td>
+                      <td className="text-xs text-muted-foreground">{c.banks?.join(", ") || "—"}</td>
+                      <td>
+                        {c.status === "approved" && <span className="cf-badge-green">Aprovado</span>}
+                        {c.status === "review" && <span className="cf-badge-yellow">Em revisão</span>}
+                        {c.status === "classify" && <span className="cf-badge-blue">Classificar</span>}
+                      </td>
+                      <td>
+                        <div className="flex gap-2">
+                          <button className="cf-btn-ghost text-xs py-1 px-2" onClick={() => startEditClient(c)}>Editar</button>
+                          <button className="cf-btn-ghost text-xs py-1 px-2 text-cf-red" onClick={() => deleteClient(c.id)}>Excluir</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
