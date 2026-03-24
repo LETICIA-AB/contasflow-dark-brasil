@@ -78,6 +78,7 @@ const KEYS = {
 
 // === Seed data ===
 import { classifyTransaction } from "./classificationRules";
+import { resolveAccounts } from "./chartOfAccounts";
 
 function generateTransactions(clientId: string): Transaction[] {
   const baseData: Record<string, [string, number, string][]> = {
