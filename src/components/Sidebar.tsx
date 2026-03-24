@@ -9,7 +9,8 @@ interface SidebarProps {
 }
 
 const clientTabs = [
-  { id: "uploads", label: "Extratos", icon: "📄" },
+  { id: "uploads", label: "Envios", icon: "📤" },
+  { id: "classify", label: "Classificar", icon: "🏷️" },
   { id: "dashboard", label: "Dashboard", icon: "📊" },
   { id: "insights", label: "Insights", icon: "💡" },
 ];

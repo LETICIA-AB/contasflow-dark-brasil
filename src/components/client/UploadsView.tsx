@@ -1,7 +1,5 @@
 import { useState, useRef } from "react";
-import { CATEGORIES, type Client, type Transaction, type Upload, loadClients, saveClients, loadUploads, saveUploads } from "@/data/store";
-import { recordClassification } from "@/data/classificationRules";
-import { resolveAccounts } from "@/data/chartOfAccounts";
+import { type Client, type Upload, loadClients, saveClients, loadUploads, saveUploads } from "@/data/store";
 
 interface Props {
   client: Client;
@@ -30,7 +28,7 @@ export default function UploadsView({ client, onUpdate }: Props) {
   const [period, setPeriod] = useState("Mar/2026");
   const [dragging, setDragging] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [, setTick] = useState(0);
+  const [submitted, setSubmitted] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const periods = ["Out/2025", "Nov/2025", "Dez/2025", "Jan/2026", "Fev/2026", "Mar/2026"];
@@ -41,7 +39,6 @@ export default function UploadsView({ client, onUpdate }: Props) {
     (m) => !uploadedPeriods.has(m.period) && periods.includes(m.period)
   );
 
-  // Bank alerts
   const uploadedBanks = new Set(uploads.filter((u) => u.period === period).map((u) => u.bank));
   const missingBanks = (client.banks || []).filter((b) => {
     const shortName = b.split(" ")[0];
@@ -52,6 +49,7 @@ export default function UploadsView({ client, onUpdate }: Props) {
   const total = client.transactions.length;
   const classified = total - pending.length;
   const progress = total > 0 ? Math.round((classified / total) * 100) : 100;
+  const canSubmit = pending.length === 0 && total > 0;
 
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -75,31 +73,15 @@ export default function UploadsView({ client, onUpdate }: Props) {
     }, 1500);
   };
 
-  const handleClassify = (txId: string, category: string) => {
-    const clients = loadClients();
-    const c = clients.find((cl) => cl.id === client.id);
-    if (!c) return;
-    const tx = c.transactions.find((t) => t.id === txId);
-    if (!tx) return;
-    tx.category = category;
-    tx.classifiedBy = "client";
-    const accounts = resolveAccounts(category, tx.type, c.bank, c.chartOverrides);
-    tx.debitAccount = accounts.debit;
-    tx.creditAccount = accounts.credit;
-    recordClassification(tx.description, category, tx.type, c);
-    const stillPending = c.transactions.filter((t) => t.classifiedBy === "pending");
-    if (stillPending.length === 0) c.status = "review";
-    saveClients(clients);
-    onUpdate();
-    setTick((t) => t + 1);
-  };
-
-  const badgeFor = (t: Transaction) => {
-    if (t.classifiedBy === "memory") return <span className="cf-badge-purple">🧠 Memória</span>;
-    if (t.classifiedBy === "auto") return <span className="cf-badge-accent">⚡ IA</span>;
-    if (t.classifiedBy === "client") return <span className="cf-badge-blue">👤 Cliente</span>;
-    if (t.classifiedBy === "accountant") return <span className="cf-badge-purple">✍ Contador</span>;
-    return <span className="cf-badge-yellow">⏳ Pendente</span>;
+  const handleSubmit = () => {
+    const allClients = loadClients();
+    const c = allClients.find((cl) => cl.id === client.id);
+    if (c) {
+      c.status = "review";
+      saveClients(allClients);
+      onUpdate();
+      setSubmitted(true);
+    }
   };
 
   const statusBadge = (s: string) => {
@@ -111,13 +93,13 @@ export default function UploadsView({ client, onUpdate }: Props) {
   return (
     <div className="space-y-6 cf-stagger">
       <div>
-        <h2 className="text-2xl font-bold font-heading">Extratos Bancários</h2>
-        <p className="text-muted-foreground text-sm mt-1">Envie extratos, classifique transações e acompanhe seu progresso</p>
+        <h2 className="text-2xl font-bold font-heading">Envios</h2>
+        <p className="text-muted-foreground text-sm mt-1">Envie extratos bancários e acompanhe o progresso</p>
       </div>
 
-      {/* 1. Annual Progress */}
+      {/* Annual Progress */}
       <div className="cf-card">
-        <h3 className="text-sm font-semibold text-muted-foreground mb-4 uppercase tracking-wider">Progresso Anual — Extratos Enviados</h3>
+        <h3 className="text-sm font-semibold text-muted-foreground mb-4 uppercase tracking-wider">Progresso Anual</h3>
         <div className="flex items-center gap-1.5 overflow-x-auto pb-2">
           {MONTHS.map((m) => {
             const hasUpload = uploadedPeriods.has(m.period);
@@ -133,7 +115,6 @@ export default function UploadsView({ client, onUpdate }: Props) {
                         ? "bg-cf-red/10 text-cf-red border border-cf-red/30"
                         : "bg-secondary/40 text-muted-foreground border border-border"
                   } ${isCurrent ? "ring-2 ring-primary ring-offset-2 ring-offset-card" : ""}`}
-                  title={hasUpload ? `${m.period} — Enviado` : isRequired ? `${m.period} — Pendente` : m.period}
                 >
                   {hasUpload ? "✓" : isRequired ? "!" : "—"}
                 </div>
@@ -150,7 +131,7 @@ export default function UploadsView({ client, onUpdate }: Props) {
         )}
       </div>
 
-      {/* 2. Upload compact */}
+      {/* Upload */}
       <div className="cf-card">
         <div className="flex flex-wrap items-end gap-4 mb-4">
           <div>
@@ -180,7 +161,6 @@ export default function UploadsView({ client, onUpdate }: Props) {
           </div>
         </div>
 
-        {/* Bank alerts */}
         {missingBanks.length > 0 && (
           <div className="px-3 py-2 rounded-lg bg-cf-yellow/10 border border-cf-yellow/30 text-xs">
             <p className="text-cf-yellow font-medium">⚠ Extratos pendentes ({period}): {missingBanks.join(", ")}</p>
@@ -188,81 +168,44 @@ export default function UploadsView({ client, onUpdate }: Props) {
         )}
       </div>
 
-      {/* 3. Classification */}
-      <div className="cf-card">
-        <h3 className="font-semibold mb-3">Classificação de Transações</h3>
-        <div className="flex items-center justify-between mb-3">
+      {/* Classification progress + submit */}
+      <div className="cf-card space-y-4">
+        <h3 className="font-semibold">Progresso de Classificação</h3>
+        <div className="flex items-center justify-between">
           <span className="text-sm font-medium">{classified} de {total} classificadas</span>
           <span className="text-sm font-bold text-primary">{progress}%</span>
         </div>
         <div className="w-full h-2.5 bg-secondary rounded-full overflow-hidden">
           <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
         </div>
-        {progress === 100 && <p className="text-cf-green text-sm mt-3 font-medium">✓ Todas classificadas! Aguardando revisão do contador.</p>}
+
+        {/* Submission block/warning */}
+        {submitted ? (
+          <div className="px-4 py-3 rounded-lg bg-cf-green/10 border border-cf-green/30">
+            <p className="text-cf-green text-sm font-medium">✓ Envio concluído! Aguardando revisão do contador.</p>
+          </div>
+        ) : !canSubmit ? (
+          <div className="space-y-3">
+            <div className="px-4 py-3 rounded-lg bg-cf-yellow/10 border border-cf-yellow/30">
+              <p className="text-cf-yellow text-sm font-medium">
+                ⚠ Você tem {pending.length} transação(ões) pendente(s) de classificação.
+              </p>
+              <p className="text-cf-yellow/80 text-xs mt-1">
+                Classifique todas as transações na aba <strong>"Classificar"</strong> para concluir o envio deste período. Seu progresso é salvo automaticamente.
+              </p>
+            </div>
+            <button className="cf-btn-secondary opacity-50 cursor-not-allowed" disabled>
+              🔒 Concluir envio do período
+            </button>
+          </div>
+        ) : (
+          <button className="cf-btn-primary" onClick={handleSubmit}>
+            ✓ Concluir envio do período
+          </button>
+        )}
       </div>
 
-      {pending.length > 0 && (
-        <div className="cf-card border-cf-yellow/30 p-0 overflow-hidden">
-          <div className="px-5 py-4 border-b border-border bg-cf-yellow/5">
-            <h3 className="font-semibold text-cf-yellow">⚠ {pending.length} transações pendentes</h3>
-          </div>
-          <div className="divide-y divide-border/50">
-            {pending.map((tx) => (
-              <div key={tx.id} className="px-5 py-4 flex items-center gap-4 flex-wrap">
-                <div className="flex-1 min-w-[200px]">
-                  <p className="text-sm font-medium">{tx.description}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {tx.date} · {tx.type === "credit" ? "+" : "-"}R$ {tx.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-                <select className="cf-select max-w-[220px]" defaultValue="" onChange={(e) => handleClassify(tx.id, e.target.value)}>
-                  <option value="" disabled>Selecionar categoria</option>
-                  {CATEGORIES.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* All transactions with debit/credit accounts */}
-      <div className="cf-card p-0 overflow-hidden">
-        <div className="px-5 py-4 border-b border-border">
-          <h3 className="font-semibold">Todas as transações</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="cf-table">
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Descrição</th>
-                <th>Valor</th>
-                <th>Categoria</th>
-                <th>Débito</th>
-                <th>Crédito</th>
-                <th>Origem</th>
-              </tr>
-            </thead>
-            <tbody>
-              {client.transactions.map((tx) => (
-                <tr key={tx.id}>
-                  <td className="text-muted-foreground whitespace-nowrap">{tx.date}</td>
-                  <td className="font-medium">{tx.description}</td>
-                  <td className={tx.type === "credit" ? "text-cf-green" : "text-cf-red"}>
-                    {tx.type === "credit" ? "+" : "-"}R$ {tx.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="text-sm">{tx.category || "—"}</td>
-                  <td className="font-mono text-xs text-muted-foreground">{tx.debitAccount || "—"}</td>
-                  <td className="font-mono text-xs text-muted-foreground">{tx.creditAccount || "—"}</td>
-                  <td>{badgeFor(tx)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* 4. Upload History */}
+      {/* Upload History */}
       {uploads.length > 0 && (
         <div className="cf-card p-0 overflow-hidden">
           <div className="px-5 py-4 border-b border-border">

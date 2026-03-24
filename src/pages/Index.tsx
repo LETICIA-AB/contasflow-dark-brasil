@@ -3,6 +3,7 @@ import { loadClients, type Session, type Client } from "@/data/store";
 import Login from "@/components/Login";
 import Sidebar from "@/components/Sidebar";
 import UploadsView from "@/components/client/UploadsView";
+import ClassifyView from "@/components/client/ClassifyView";
 import DashboardView from "@/components/client/DashboardView";
 import InsightsView from "@/components/client/InsightsView";
 import ClientListView from "@/components/accountant/ClientListView";
@@ -73,6 +74,7 @@ export default function Index() {
     if (session.type === "client" && currentClient) {
       switch (view) {
         case "uploads": return <UploadsView client={currentClient} onUpdate={refresh} />;
+        case "classify": return <ClassifyView client={currentClient} onUpdate={refresh} />;
         case "dashboard": return <DashboardView client={currentClient} />;
         case "insights": return <InsightsView client={currentClient} />;
       }
