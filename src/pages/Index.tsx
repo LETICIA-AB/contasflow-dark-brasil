@@ -74,6 +74,7 @@ export default function Index() {
     if (session.type === "client" && currentClient) {
       switch (view) {
         case "uploads": return <UploadsView client={currentClient} onUpdate={refresh} />;
+        case "classify": return <ClassifyView client={currentClient} onUpdate={refresh} />;
         case "dashboard": return <DashboardView client={currentClient} />;
         case "insights": return <InsightsView client={currentClient} />;
       }
