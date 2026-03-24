@@ -4,7 +4,7 @@ import { addNotification } from "@/data/notificationStore";
 import { classifyTransaction } from "@/data/classificationRules";
 import { resolveAccounts } from "@/data/chartOfAccounts";
 import { parseOFX, parseCSV } from "@/data/fileParser";
-import { CheckCircle2, AlertTriangle, Lock, FolderUp, Clock } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Lock, FolderUp, Clock, ChevronDown, ChevronRight } from "lucide-react";
 
 interface Props {
   client: Client;
