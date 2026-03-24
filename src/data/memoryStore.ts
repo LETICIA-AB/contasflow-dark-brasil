@@ -72,6 +72,7 @@ export function saveToMemory(
     existing.creditAccount = creditAccount;
     existing.count += 1;
     existing.lastUsed = new Date().toISOString();
+    if (clientDescription) existing.clientDescription = clientDescription;
   } else {
     memory.push({
       normalizedDesc: normalized,
@@ -81,6 +82,7 @@ export function saveToMemory(
       clientId,
       count: 1,
       lastUsed: new Date().toISOString(),
+      clientDescription,
     });
   }
 

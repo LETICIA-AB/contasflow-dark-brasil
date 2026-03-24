@@ -23,6 +23,7 @@ export interface Transaction {
   accountantNote?: string;
   validated?: boolean; // explicitly validated by accountant
   rejectedBy?: "accountant";
+  clientDescription?: string; // descrição livre quando categoria é "Outros"
 }
 
 export interface Client {

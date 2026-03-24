@@ -2,6 +2,8 @@ import { useState } from "react";
 import { CATEGORIES, type Client, type Transaction, loadClients, saveClients } from "@/data/store";
 import { resolveAccounts } from "@/data/chartOfAccounts";
 import { recordClassification } from "@/data/classificationRules";
+import { saveToMemory, findInMemory } from "@/data/memoryStore";
+import { Textarea } from "@/components/ui/textarea";
 
 interface Props {
   client: Client;
@@ -15,13 +17,31 @@ export default function ClassifyView({ client, onUpdate }: Props) {
   const [, setTick] = useState(0);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [selectedCategory, setSelectedCategory] = useState<Record<string, string>>({});
+  const [othersInput, setOthersInput] = useState<Record<string, string>>({});
 
   const pending = client.transactions.filter((t) => t.classifiedBy === "pending");
   const total = client.transactions.length;
   const classified = total - pending.length;
   const progress = total > 0 ? Math.round((classified / total) * 100) : 100;
 
-  const handleClassify = (txId: string, category: string) => {
+  const handleCategorySelect = (txId: string, category: string) => {
+    if (category === "Outros") {
+      setSelectedCategory((prev) => ({ ...prev, [txId]: category }));
+    } else {
+      handleClassify(txId, category);
+    }
+  };
+
+  const handleConfirmOthers = (txId: string) => {
+    const desc = othersInput[txId]?.trim();
+    if (!desc) return;
+    handleClassify(txId, "Outros", desc);
+    setSelectedCategory((prev) => { const n = { ...prev }; delete n[txId]; return n; });
+    setOthersInput((prev) => { const n = { ...prev }; delete n[txId]; return n; });
+  };
+
+  const handleClassify = (txId: string, category: string, clientDescription?: string) => {
     const clients = loadClients();
     const c = clients.find((cl) => cl.id === client.id);
     if (!c) return;
@@ -32,7 +52,18 @@ export default function ClassifyView({ client, onUpdate }: Props) {
     const accounts = resolveAccounts(category, tx.type, c.bank, c.chartOverrides);
     tx.debitAccount = accounts.debit;
     tx.creditAccount = accounts.credit;
+    if (clientDescription) tx.clientDescription = clientDescription;
     recordClassification(tx.description, category, tx.type, c);
+
+    // Save to memory (with clientDescription for "Outros")
+    saveToMemory(
+      tx.description,
+      category,
+      accounts.debit,
+      accounts.credit,
+      c.id,
+      clientDescription
+    );
 
     const stillPending = c.transactions.filter((t) => t.classifiedBy === "pending");
     if (stillPending.length === 0) c.status = "review";
@@ -50,7 +81,6 @@ export default function ClassifyView({ client, onUpdate }: Props) {
     return <span className="cf-badge-yellow">⏳ Pendente</span>;
   };
 
-  // Filtered transactions
   const filtered = client.transactions.filter((tx) => {
     if (statusFilter === "pending" && tx.classifiedBy !== "pending") return false;
     if (statusFilter === "classified" && tx.classifiedBy === "pending") return false;
@@ -87,17 +117,42 @@ export default function ClassifyView({ client, onUpdate }: Props) {
           </div>
           <div className="divide-y divide-border/50">
             {pending.map((tx) => (
-              <div key={tx.id} className="px-5 py-4 flex items-center gap-4 flex-wrap">
-                <div className="flex-1 min-w-[200px]">
-                  <p className="text-sm font-medium">{tx.description}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {tx.date} · {tx.type === "credit" ? "+" : "-"}R$ {tx.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                  </p>
+              <div key={tx.id} className="px-5 py-4 space-y-3">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex-1 min-w-[200px]">
+                    <p className="text-sm font-medium">{tx.description}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {tx.date} · {tx.type === "credit" ? "+" : "-"}R$ {tx.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <select
+                    className="cf-select max-w-[220px]"
+                    value={selectedCategory[tx.id] || ""}
+                    onChange={(e) => handleCategorySelect(tx.id, e.target.value)}
+                  >
+                    <option value="" disabled>Selecionar categoria</option>
+                    {CATEGORIES.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
                 </div>
-                <select className="cf-select max-w-[220px]" defaultValue="" onChange={(e) => handleClassify(tx.id, e.target.value)}>
-                  <option value="" disabled>Selecionar categoria</option>
-                  {CATEGORIES.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
+
+                {/* Campo de descrição para "Outros" */}
+                {selectedCategory[tx.id] === "Outros" && (
+                  <div className="ml-0 pl-4 border-l-2 border-primary/30 space-y-2">
+                    <Textarea
+                      placeholder="Descreva o que foi essa movimentação..."
+                      value={othersInput[tx.id] || ""}
+                      onChange={(e) => setOthersInput((prev) => ({ ...prev, [tx.id]: e.target.value }))}
+                      className="text-sm min-h-[60px] bg-background"
+                    />
+                    <button
+                      onClick={() => handleConfirmOthers(tx.id)}
+                      disabled={!othersInput[tx.id]?.trim()}
+                      className="px-4 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Confirmar
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -150,7 +205,14 @@ export default function ClassifyView({ client, onUpdate }: Props) {
               {filtered.map((tx) => (
                 <tr key={tx.id}>
                   <td className="text-muted-foreground whitespace-nowrap">{tx.date}</td>
-                  <td className="font-medium">{tx.description}</td>
+                  <td className="font-medium">
+                    {tx.description}
+                    {tx.category === "Outros" && tx.clientDescription && (
+                      <span className="block text-xs text-muted-foreground mt-0.5 italic">
+                        📝 {tx.clientDescription}
+                      </span>
+                    )}
+                  </td>
                   <td className={tx.type === "credit" ? "text-cf-green" : "text-cf-red"}>
                     {tx.type === "credit" ? "+" : "-"}R$ {tx.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                   </td>
