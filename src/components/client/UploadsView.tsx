@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { type Client, type Transaction, type Upload, loadClients, saveClients, loadUploads, saveUploads, generateGenericTransactions } from "@/data/store";
+import { type Client, type Transaction, type Upload, loadClients, saveClients, loadUploads, saveUploads } from "@/data/store";
 import { addNotification } from "@/data/notificationStore";
 import { classifyTransaction } from "@/data/classificationRules";
 import { resolveAccounts } from "@/data/chartOfAccounts";
