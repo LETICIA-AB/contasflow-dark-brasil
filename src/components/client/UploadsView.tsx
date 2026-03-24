@@ -157,9 +157,8 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
       }
 
       setProcessing(false);
-      if (onNavigate) {
-        setTimeout(() => onNavigate("confirm"), 1000);
-      }
+      // Stay on uploads so the user can see the updated progress and
+      // navigate to "Conferir" when ready — no forced redirect.
     });
   };
 
@@ -177,6 +176,8 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
       });
       onUpdate();
       setSubmitted(true);
+      // After submission, go to the dashboard to show financial summary
+      if (onNavigate) setTimeout(() => onNavigate("dashboard"), 1800);
     }
   };
 
@@ -275,6 +276,18 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
             <p className="text-cf-red text-sm font-medium">{parseError}</p>
             <p className="text-cf-red/70 text-xs mt-1">Formatos suportados: OFX (extrato bancário) e CSV com colunas de data, descrição e valor.</p>
           </div>
+        </div>
+      )}
+
+      {!parseError && !processing && total > 0 && pending > 0 && onNavigate && (
+        <div className="cf-card border-primary/30 bg-primary/5 flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-sm font-semibold text-primary">Extrato carregado com sucesso!</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{total} transações importadas · {pending} aguardando classificação</p>
+          </div>
+          <button className="cf-btn-primary text-sm flex items-center gap-2" onClick={() => onNavigate("confirm")}>
+            <CheckCircle2 className="w-4 h-4" /> Ir para Conferir
+          </button>
         </div>
       )}
 
