@@ -15,7 +15,7 @@ export default function AdminView({ clients, onUpdate }: Props) {
   const [formCnpj, setFormCnpj] = useState("");
   const [formPassword, setFormPassword] = useState("");
   const [formClientId, setFormClientId] = useState("");
-  const [formBanks, setFormBanks] = useState<string[]>([]);
+  
   const [banks, setBanks] = useState<BankEntry[]>(loadBanks);
   const [newBankName, setNewBankName] = useState("");
   const [newBankCode, setNewBankCode] = useState("");
@@ -35,7 +35,6 @@ export default function AdminView({ clients, onUpdate }: Props) {
     setFormCnpj("");
     setFormPassword("");
     setFormClientId("");
-    setFormBanks([]);
   };
 
   const startEdit = (u: User) => {
@@ -43,8 +42,6 @@ export default function AdminView({ clients, onUpdate }: Props) {
     setFormCnpj(u.cnpj);
     setFormPassword(u.password);
     setFormClientId(u.clientId);
-    const c = clients.find((cl) => cl.id === u.clientId);
-    setFormBanks(c?.banks || []);
   };
 
   const handleSave = () => {
@@ -63,11 +60,6 @@ export default function AdminView({ clients, onUpdate }: Props) {
       if (u) { u.cnpj = formCnpj; u.password = formPassword; u.clientId = formClientId; }
     }
     saveUsers(allUsers);
-    if (formClientId) {
-      const allClients = loadClients();
-      const c = allClients.find((cl) => cl.id === formClientId);
-      if (c) { c.banks = formBanks; saveClients(allClients); }
-    }
     refreshUsers();
     setEditing(null);
     onUpdate();
@@ -85,10 +77,6 @@ export default function AdminView({ clients, onUpdate }: Props) {
     if (!window.confirm("Excluir este usuário?")) return;
     saveUsers(loadUsers().filter((u) => u.id !== userId));
     refreshUsers();
-  };
-
-  const toggleBank = (name: string) => {
-    setFormBanks((prev) => prev.includes(name) ? prev.filter((b) => b !== name) : [...prev, name]);
   };
 
   const handleAddBank = () => {
@@ -117,7 +105,7 @@ export default function AdminView({ clients, onUpdate }: Props) {
   const handleClientSelect = (cid: string) => {
     setFormClientId(cid);
     const c = clients.find((cl) => cl.id === cid);
-    if (c) { setFormCnpj(c.cnpj); setFormBanks(c.banks || []); }
+    if (c) { setFormCnpj(c.cnpj); }
   };
 
   // === Client CRUD ===
@@ -240,18 +228,6 @@ export default function AdminView({ clients, onUpdate }: Props) {
                 <div>
                   <label className="block text-sm text-muted-foreground mb-1">Senha</label>
                   <input className="cf-input" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm text-muted-foreground mb-2">Bancos utilizados</label>
-                <div className="flex flex-wrap gap-2">
-                  {banks.filter((b) => b.active).map((b) => (
-                    <label key={b.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all border ${formBanks.includes(b.name) ? "bg-primary/15 border-primary/40 text-primary" : "bg-secondary border-border text-muted-foreground hover:text-foreground"}`}>
-                      <input type="checkbox" className="sr-only" checked={formBanks.includes(b.name)} onChange={() => toggleBank(b.name)} />
-                      {b.name}
-                    </label>
-                  ))}
                 </div>
               </div>
 
