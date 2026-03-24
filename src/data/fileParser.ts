@@ -218,50 +218,51 @@ export async function parsePDF(buffer: ArrayBuffer): Promise<ParsedTransaction[]
     }
   }
 
-  return parsePDFLines(allLines);
+  // Join all extracted text into one string and do a global scan.
+  // This handles PDFs where date, description and amount are at slightly
+  // different Y coordinates and end up in separate "rows".
+  return parsePDFText(allLines.join("\n"));
 }
 
 /**
- * Parse text lines extracted from a PDF to find Brazilian bank statement
- * transactions. Handles Stone, Nubank, Itaú, Bradesco, Sicoob and others.
+ * Global-scan parser for Brazilian bank statement text extracted from PDFs.
+ * For each date found, searches the next 350 characters for an amount —
+ * spanning multiple lines if necessary (unlike the old line-by-line approach).
+ * Handles Stone, Nubank, Itaú, Bradesco, Sicoob and other Brazilian banks.
  */
-function parsePDFLines(lines: string[]): ParsedTransaction[] {
-  const DATE_RE = /(\d{2}\/\d{2}\/\d{4})/;
-  const AMOUNT_RE = /([+-]?\s*R?\$?\s*\d{1,3}(?:\.\d{3})*,\d{2})/;
+function parsePDFText(text: string): ParsedTransaction[] {
+  const DATE_GLOBAL = /(\d{2}\/\d{2}\/\d{4})/g;
+  const AMOUNT_RE   = /([+-]?\s*R?\$?\s*\d{1,3}(?:\.\d{3})*,\d{2})/;
 
   // Keywords to infer type when no explicit +/- sign is present
   const CREDIT_KW = ["recebido", "recebida", "depósito", "deposito", "entrada", "crédito", "credito", "reembolso", "devolução", "devolucao", "rendimento", "cashback", "pix recebido", "ted recebida"];
   const DEBIT_KW  = ["pagamento", "enviado", "enviada", "saque", "débito", "debito", "taxa", "tarifa", "mensalidade", "cobrança", "cobranca", "pix enviado", "ted enviada", "transferência enviada"];
 
   const transactions: ParsedTransaction[] = [];
+  let match: RegExpExecArray | null;
 
-  for (const line of lines) {
-    const dateMatch = DATE_RE.exec(line);
-    if (!dateMatch) continue;
-
-    const amountMatch = AMOUNT_RE.exec(line);
-    if (!amountMatch) continue;
+  while ((match = DATE_GLOBAL.exec(text)) !== null) {
+    // Look for an amount in the next 350 chars after the date
+    const afterDate = text.substring(match.index + match[0].length, match.index + match[0].length + 350);
+    const amtMatch  = AMOUNT_RE.exec(afterDate);
+    if (!amtMatch) continue;
 
     // Parse date DD/MM/YYYY → YYYY-MM-DD
-    const parts = dateMatch[1].split("/");
+    const parts = match[1].split("/");
     const date = `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
 
-    // Parse amount — strip whitespace inside the match first
-    const rawAmt = amountMatch[1].replace(/\s/g, "");
+    // Parse amount
+    const rawAmt   = amtMatch[1].replace(/\s/g, "");
     const hasPlus  = rawAmt.startsWith("+");
     const hasMinus = rawAmt.startsWith("-");
-    const absAmt = parseFloat(
+    const absAmt   = parseFloat(
       rawAmt.replace(/[+\-R$]/g, "").replace(/\./g, "").replace(",", ".")
     );
     if (isNaN(absAmt) || absAmt === 0) continue;
 
-    // Description: text between end-of-date and start-of-amount
-    const dateEnd  = dateMatch.index + dateMatch[0].length;
-    const amtStart = line.indexOf(amountMatch[0], dateEnd);
-    const rawDesc  = amtStart > dateEnd
-      ? line.substring(dateEnd, amtStart)
-      : line.substring(dateEnd);
-    const description = rawDesc.trim().replace(/\s+/g, " ") || "Sem descrição";
+    // Description: text between end-of-date and start-of-amount, normalised
+    const rawDesc   = afterDate.substring(0, amtMatch.index).replace(/[\r\n]+/g, " ").trim().replace(/\s+/g, " ");
+    const description = rawDesc || "Sem descrição";
 
     // Determine credit / debit
     let type: "credit" | "debit";
@@ -271,13 +272,9 @@ function parsePDFLines(lines: string[]): ParsedTransaction[] {
       type = "debit";
     } else {
       const lower = description.toLowerCase();
-      if (CREDIT_KW.some((kw) => lower.includes(kw))) {
-        type = "credit";
-      } else if (DEBIT_KW.some((kw) => lower.includes(kw))) {
-        type = "debit";
-      } else {
-        type = "debit"; // safe default
-      }
+      if (CREDIT_KW.some((kw) => lower.includes(kw)))      type = "credit";
+      else if (DEBIT_KW.some((kw) => lower.includes(kw)))  type = "debit";
+      else                                                   type = "debit";
     }
 
     transactions.push({ date, description, amount: absAmt, type });

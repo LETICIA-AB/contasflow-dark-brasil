@@ -336,6 +336,137 @@ export function saveUploads(uploads: Upload[]) {
   localStorage.setItem(KEYS.uploads, JSON.stringify(uploads));
 }
 
+// === Supabase async store (runs alongside localStorage) ===
+import { sbSelect, sbUpsert, supabaseConfigured } from "@/lib/supabase";
+
+/**
+ * Fetch all clients + their transactions from Supabase.
+ * Falls back gracefully if Supabase is not configured.
+ */
+export async function fetchClients(): Promise<Client[]> {
+  if (!supabaseConfigured) return [];
+  const [clientRows, txRows] = await Promise.all([
+    sbSelect<Omit<Client, "transactions"> & { chart_overrides: Record<string, { debit: string; credit: string }> }>("clients"),
+    sbSelect<{ id: string; client_id: string; date: string; description: string; amount: number; type: string; category: string; classified_by: string; rule_id?: string; debit_account?: string; credit_account?: string; approved: boolean; confidence_score?: number; accountant_note?: string; validated?: boolean; rejected_by?: string; client_description?: string; validation_flags?: ValidationFlag[] }>("transactions"),
+  ]);
+  return clientRows.map((c) => ({
+    id: c.id,
+    name: c.name,
+    cnpj: c.cnpj ?? "",
+    regime: c.regime ?? "",
+    bank: c.bank ?? "",
+    banks: (c.banks as unknown as string[]) ?? [],
+    chartOverrides: (c.chart_overrides as Record<string, { debit: string; credit: string }>) ?? {},
+    status: (c.status as Client["status"]) ?? "classify",
+    transactions: txRows
+      .filter((t) => t.client_id === c.id)
+      .map((t) => ({
+        id: t.id,
+        date: t.date,
+        description: t.description,
+        amount: Number(t.amount),
+        type: t.type as Transaction["type"],
+        category: t.category ?? "",
+        classifiedBy: (t.classified_by as Transaction["classifiedBy"]) ?? "pending",
+        ruleId: t.rule_id,
+        debitAccount: t.debit_account,
+        creditAccount: t.credit_account,
+        approved: t.approved ?? false,
+        confidenceScore: t.confidence_score,
+        accountantNote: t.accountant_note,
+        validated: t.validated,
+        rejectedBy: t.rejected_by as Transaction["rejectedBy"],
+        clientDescription: t.client_description,
+        validationFlags: (t.validation_flags as ValidationFlag[]) ?? [],
+      })),
+  }));
+}
+
+/** Persist a single client (metadata only) and all its transactions to Supabase. */
+export async function persistClient(client: Client): Promise<void> {
+  if (!supabaseConfigured) return;
+  await sbUpsert("clients", {
+    id: client.id,
+    name: client.name,
+    cnpj: client.cnpj,
+    regime: client.regime,
+    bank: client.bank,
+    banks: client.banks,
+    chart_overrides: client.chartOverrides,
+    status: client.status,
+  });
+  if (client.transactions.length > 0) {
+    await sbUpsert(
+      "transactions",
+      client.transactions.map((t) => ({
+        id: t.id,
+        client_id: client.id,
+        date: t.date,
+        description: t.description,
+        amount: t.amount,
+        type: t.type,
+        category: t.category,
+        classified_by: t.classifiedBy,
+        rule_id: t.ruleId,
+        debit_account: t.debitAccount,
+        credit_account: t.creditAccount,
+        approved: t.approved,
+        confidence_score: t.confidenceScore,
+        accountant_note: t.accountantNote,
+        validated: t.validated,
+        rejected_by: t.rejectedBy,
+        client_description: t.clientDescription,
+        validation_flags: t.validationFlags ?? [],
+      }))
+    );
+  }
+}
+
+/** Fetch all uploads from Supabase. */
+export async function fetchUploads(): Promise<Upload[]> {
+  if (!supabaseConfigured) return [];
+  const rows = await sbSelect<{ id: string; client_id: string; filename: string; bank: string; size: string; date: string; period: string; status: string }>("uploads");
+  return rows.map((r) => ({
+    id: r.id,
+    clientId: r.client_id,
+    filename: r.filename,
+    bank: r.bank,
+    size: r.size,
+    date: r.date,
+    period: r.period,
+    status: r.status as Upload["status"],
+  }));
+}
+
+/** Persist a single upload to Supabase. */
+export async function persistUpload(upload: Upload): Promise<void> {
+  if (!supabaseConfigured) return;
+  await sbUpsert("uploads", {
+    id: upload.id,
+    client_id: upload.clientId,
+    filename: upload.filename,
+    bank: upload.bank,
+    size: upload.size,
+    date: upload.date,
+    period: upload.period,
+    status: upload.status,
+  });
+}
+
+/**
+ * One-time migration: push all localStorage data to Supabase.
+ * Called on first load after Supabase is configured.
+ */
+export async function migrateLocalToSupabase(): Promise<void> {
+  if (!supabaseConfigured) return;
+  const clients = loadClients();
+  const uploads = loadUploads();
+  await Promise.all([
+    ...clients.map(persistClient),
+    ...uploads.map(persistUpload),
+  ]);
+}
+
 export function formatCurrency(value: number): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }

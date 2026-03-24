@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { type Client, type Transaction, type Upload, loadClients, saveClients, loadUploads, saveUploads } from "@/data/store";
+import { type Client, type Transaction, type Upload, loadClients, saveClients, loadUploads, saveUploads, persistClient, persistUpload } from "@/data/store";
 import { addNotification } from "@/data/notificationStore";
 import { classifyTransaction } from "@/data/classificationRules";
 import { resolveAccounts } from "@/data/chartOfAccounts";
@@ -105,6 +105,8 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
       const updated = [...allUploads, ...newUploads];
       saveUploads(updated);
       setUploads(updated.filter((u) => u.clientId === client.id));
+      // Fire-and-forget sync to Supabase
+      newUploads.forEach((u) => { persistUpload(u).catch(() => {}); });
 
       let allParsed: import("@/data/fileParser").ParsedTransaction[] = [];
       let pdfError = false;
@@ -164,6 +166,8 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
           setParseError("Nenhuma transação encontrada. Verifique se o formato é OFX ou CSV bancário válido.");
         }
         saveClients(allClients);
+        // Sync client + transactions to Supabase (fire-and-forget)
+        if (c) persistClient(c).catch(() => {});
         onUpdate();
       }
 

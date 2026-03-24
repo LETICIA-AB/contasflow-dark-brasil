@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CATEGORIES, type Client, type Transaction, loadClients, saveClients } from "@/data/store";
+import { CATEGORIES, type Client, type Transaction, loadClients, saveClients, persistClient } from "@/data/store";
 import { resolveAccounts } from "@/data/chartOfAccounts";
 import { recordClassification, classifyTransaction } from "@/data/classificationRules";
 import { saveToMemory } from "@/data/memoryStore";
@@ -46,6 +46,7 @@ export default function ConfirmView({ client, onUpdate }: Props) {
     if (stillPending.length === 0) c.status = "review";
 
     saveClients(clients);
+    persistClient(c).catch(() => {});
     onUpdate();
     setTick((t) => t + 1);
   };
@@ -92,6 +93,7 @@ export default function ConfirmView({ client, onUpdate }: Props) {
       const stillPending = c.transactions.filter((t) => t.classifiedBy === "pending");
       if (stillPending.length === 0) c.status = "review";
       saveClients(clients);
+      persistClient(c).catch(() => {});
       onUpdate();
       setTick((t) => t + 1);
     }
