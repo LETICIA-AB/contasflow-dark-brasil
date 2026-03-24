@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { type Client, type Transaction, type Upload, loadClients, saveClients, loadUploads, saveUploads, generateGenericTransactions } from "@/data/store";
+import { type Client, type Transaction, type Upload, loadClients, saveClients, loadUploads, saveUploads } from "@/data/store";
 import { addNotification } from "@/data/notificationStore";
 import { classifyTransaction } from "@/data/classificationRules";
 import { resolveAccounts } from "@/data/chartOfAccounts";
@@ -33,6 +33,7 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
   const [uploads, setUploads] = useState<Upload[]>(() => loadUploads().filter((u) => u.clientId === client.id));
   const [period, setPeriod] = useState("Mar/2026");
   const [dragging, setDragging] = useState(false);
+  const [parseError, setParseError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [expandedUploadId, setExpandedUploadId] = useState<string | null>(null);
@@ -63,6 +64,7 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setProcessing(true);
+    setParseError(null);
 
     const fileArray = Array.from(files);
     const readers: Promise<{ file: File; content: string }>[] = fileArray.map(
@@ -133,18 +135,8 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
           });
           c.transactions = [...c.transactions, ...newTxs];
         } else {
-          // Fallback: generate generic transactions if parser found nothing
-          const monthMap: Record<string, string> = {
-            "Jan": "01", "Fev": "02", "Mar": "03", "Abr": "04", "Mai": "05", "Jun": "06",
-            "Jul": "07", "Ago": "08", "Set": "09", "Out": "10", "Nov": "11", "Dez": "12",
-          };
-          const [monthKey, year] = period.split("/");
-          const prefix = `${year}-${monthMap[monthKey]}`;
-          const existing = c.transactions.filter((t) => t.date.startsWith(prefix));
-          if (existing.length === 0) {
-            const newTxs = generateGenericTransactions(client.id, client.bank, period);
-            c.transactions = [...c.transactions, ...newTxs];
-          }
+          // No transactions found — show error, don't generate fake data
+          setParseError("Nenhuma transação encontrada nos arquivos enviados. Verifique se o formato é OFX ou CSV bancário válido.");
         }
         saveClients(allClients);
         onUpdate();
@@ -261,6 +253,16 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
           </div>
         )}
       </div>
+
+      {parseError && (
+        <div className="cf-card px-4 py-3 bg-cf-red/10 border border-cf-red/30 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 text-cf-red shrink-0 mt-0.5" />
+          <div>
+            <p className="text-cf-red text-sm font-medium">{parseError}</p>
+            <p className="text-cf-red/70 text-xs mt-1">Formatos suportados: OFX (extrato bancário) e CSV com colunas de data, descrição e valor.</p>
+          </div>
+        </div>
+      )}
 
       {/* Classification progress + submit */}
       <div className="cf-card space-y-4">
