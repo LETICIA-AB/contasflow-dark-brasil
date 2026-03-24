@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { loadUsers, saveUsers, formatCNPJ, type Session } from "@/data/store";
+import logoSrc from "@/assets/contasflow-logo.png";
 
 interface LoginProps {
   onLogin: (session: Session) => void;
