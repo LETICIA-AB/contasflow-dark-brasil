@@ -1,73 +1,72 @@
 
 
-## Plano de Contas vinculado por cliente + bloqueio de envio + reorganização do portal
+# Reorganizacao Completa do ContasFlow
 
-### Resumo
+## Resumo
 
-Tres mudancas principais:
-1. **Plano de contas por cliente** -- cada cliente tem seu proprio plano (ou o padrao). Import no admin vincula ao cliente selecionado. Deteccao de duplicata sugere replicar.
-2. **Bloqueio de conclusao de envio** -- cliente so pode "concluir" envio apos classificar tudo. Progresso salvo normalmente.
-3. **Reorganizacao do portal do cliente** -- consolidar views, remover redundancias, layout mais limpo.
+Reestruturar a aplicacao para tornar o contador analitico (nao operacional) e o cliente agil. Inclui: novo Painel Geral do contador, simplificacao do fluxo do cliente com redirecionamento automatico apos upload, reorganizacao de abas e responsabilidades.
 
 ---
 
-### Mudancas tecnicas
+## Mudancas
 
-#### 1. Modelo de dados (`store.ts`, `chartStore.ts`)
+### 1. Fluxo do Cliente: Upload → Redireciona para Conferir
 
-- `Client` ganha campo `chartId?: string` -- referencia ao plano vinculado
-- Novo store `cf-v3-client-charts` no `chartStore.ts`:
-  - `saveClientChart(clientId, accounts[])` -- salva plano vinculado ao cliente
-  - `loadClientChart(clientId): Account[] | null`
-  - `listAllClientCharts(): { clientId, chartHash, accountCount }[]` -- para deteccao de duplicatas
-  - `getActiveChartForClient(clientId)` -- retorna chart do cliente, ou global, ou padrao
-- Funcao `hashChart(accounts[])` para comparar planos (hash simples baseado em codes concatenados)
+**`UploadsView.tsx`**: Recebe uma nova prop `onNavigate` (vinda do Index). Apos o upload ser processado com sucesso (linha 74), chama `onNavigate("confirm")` automaticamente apos 1s de delay, levando o cliente direto para a tela de conferencia.
 
-#### 2. Admin - Plano de Contas (`AdminView.tsx`)
+**`Index.tsx`**: Passa `onNavigate={setView}` para o UploadsView.
 
-- Import de plano agora exige selecionar cliente destino primeiro
-- Apos parse do arquivo, antes de confirmar:
-  - Verifica se hash do plano ja existe em outro cliente
-  - Se sim, mostra alerta: "Este plano ja esta vinculado a [Empresa X]. Deseja replicar?"
-  - Botao "Replicar para outro cliente" que copia o plano
-- Na listagem, mostra qual plano cada cliente tem vinculado (badge: "Personalizado" ou "Padrao")
-- Tabela resumo: Cliente | Plano | Qtd contas | Acoes (ver/editar/remover)
+### 2. ClassifyView → ConfirmView (Simplificacao)
 
-#### 3. Bloqueio de envio no portal do cliente (`UploadsView.tsx`)
+**Renomear** `ClassifyView.tsx` para `ConfirmView.tsx`. Simplificar a interface:
+- Mostrar apenas transacoes pendentes com a sugestao da IA pre-selecionada
+- Botao "Confirmar todas as sugestoes" para aceitar em lote
+- Remover filtros complexos e tabela de transacoes ja classificadas
+- Manter barra de progresso e mensagem de sucesso
 
-- Botao "Concluir envio do periodo" aparece apos upload
-- Se `pending.length > 0`: botao desabilitado + banner amarelo explicando:
-  - "Voce tem X transacoes pendentes de classificacao. Classifique todas para concluir o envio deste periodo."
-  - Progresso salvo normalmente, nada se perde
-- Se `pending.length === 0`: botao verde habilitado, ao clicar muda status do cliente
+### 3. Sidebar do Cliente
 
-#### 4. Reorganizacao do portal do cliente
+```text
+📤 Envios
+✅ Conferir  (era "Classificar")
+📊 Dashboard
+💡 Insights
+```
 
-**UploadsView.tsx** -- simplificar:
-- Mover a secao de "Todas as transacoes" para a aba Classificar (ClassifyView), removendo duplicidade
-- Manter apenas: progresso anual, upload, barra de progresso de classificacao, pendentes inline, historico de envios
-- Adicionar botao "Concluir envio"
+### 4. Novo: Painel Geral do Contador (`AccountantDashboardView.tsx`)
 
-**ClassifyView.tsx** -- enriquecer:
-- Absorver a tabela completa de transacoes com colunas Debito/Credito
-- Filtros por status (Pendente/Classificado/Todos) e por tipo (Credito/Debito)
+Dashboard consolidado com Recharts:
+- Cards: total clientes, transacoes do mes, taxa de automacao (% IA+memoria), alertas ativos
+- Grafico de barras: receita vs despesa consolidado de todos os clientes
+- Ranking de risco: clientes ordenados por score de confianca do validationEngine
+- Lista de alertas recentes de todos os clientes
 
-**DashboardView.tsx** -- manter como esta (cards + grafico + analise horizontal)
+### 5. Sidebar do Contador
 
-**InsightsView.tsx** -- manter como esta
+```text
+🏢 Carteira
+📊 Painel Geral  (NOVO)
+🤖 Regras IA
+📋 Plano de Contas
+⚙️ Admin
+```
 
-**Sidebar.tsx** -- renomear "Extratos" para "Envios" para diferenciar melhor de "Classificar"
+### 6. AccountsView absorve gestao de Plano de Contas do Admin
+
+- Mover a sub-aba "chart" do `AdminView.tsx` (import de plano, vinculacao por cliente, edicao) para `AccountsView.tsx`
+- `AdminView.tsx` fica apenas com: Usuarios, Uploads e Bancos (3 sub-abas)
 
 ---
 
-### Arquivos modificados
+## Arquivos afetados
 
-| Arquivo | O que muda |
+| Arquivo | Acao |
 |---|---|
-| `src/data/chartStore.ts` | Funcoes per-client chart, hash, listagem |
-| `src/data/store.ts` | `Client.chartId` opcional |
-| `src/components/accountant/AdminView.tsx` | Import vinculado a cliente, deteccao duplicata, resumo por cliente |
-| `src/components/client/UploadsView.tsx` | Remove tabela de transacoes, adiciona botao "Concluir envio" com bloqueio |
-| `src/components/client/ClassifyView.tsx` | Absorve tabela completa com colunas debito/credito, filtros |
-| `src/components/Sidebar.tsx` | Renomear "Extratos" para "Envios" |
+| `src/components/client/ClassifyView.tsx` | Renomear para `ConfirmView.tsx`, simplificar para conferencia rapida |
+| `src/components/client/UploadsView.tsx` | Adicionar prop `onNavigate`, redirecionar apos upload |
+| `src/components/Sidebar.tsx` | Atualizar tabs: "Conferir" no cliente, "Painel Geral" no contador |
+| `src/pages/Index.tsx` | Passar `onNavigate` ao UploadsView, adicionar rota "panel", atualizar view default do contador |
+| **NOVO** `src/components/accountant/AccountantDashboardView.tsx` | Dashboard analitico consolidado com Recharts |
+| `src/components/accountant/AccountsView.tsx` | Absorver import/edicao de plano de contas do AdminView |
+| `src/components/accountant/AdminView.tsx` | Remover sub-aba "chart", manter users/uploads/banks |
 
