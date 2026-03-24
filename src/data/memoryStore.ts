@@ -7,6 +7,7 @@ export interface ClassificationMemory {
   clientId: string;
   count: number;
   lastUsed: string;
+  clientDescription?: string;
 }
 
 const MEMORY_KEY = "cf-v3-memory";
