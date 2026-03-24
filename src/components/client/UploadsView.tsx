@@ -1,10 +1,10 @@
-import { useState, useRef } from "react";
+import React, { useState, useRef } from "react";
 import { type Client, type Transaction, type Upload, loadClients, saveClients, loadUploads, saveUploads, generateGenericTransactions } from "@/data/store";
 import { addNotification } from "@/data/notificationStore";
 import { classifyTransaction } from "@/data/classificationRules";
 import { resolveAccounts } from "@/data/chartOfAccounts";
 import { parseOFX, parseCSV } from "@/data/fileParser";
-import { CheckCircle2, AlertTriangle, Lock, FolderUp, Clock } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Lock, FolderUp, Clock, ChevronDown, ChevronRight } from "lucide-react";
 
 interface Props {
   client: Client;
@@ -35,6 +35,7 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
   const [dragging, setDragging] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [expandedUploadId, setExpandedUploadId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const periods = ["Out/2025", "Nov/2025", "Dez/2025", "Jan/2026", "Fev/2026", "Mar/2026"];
@@ -320,16 +321,88 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {uploads.map((u) => (
-                  <tr key={u.id}>
-                    <td className="font-medium">{u.filename}</td>
-                    <td>{u.bank}</td>
-                    <td className="text-muted-foreground">{u.size}</td>
-                    <td className="text-muted-foreground">{u.date}</td>
-                    <td>{u.period}</td>
-                    <td>{statusBadge(u.status)}</td>
-                  </tr>
-                ))}
+                {uploads.map((u) => {
+                  const isExpanded = expandedUploadId === u.id;
+                  const periodTxs = isExpanded
+                    ? client.transactions.filter((t) => {
+                        const monthMap: Record<string, string> = {
+                          "Jan": "01", "Fev": "02", "Mar": "03", "Abr": "04", "Mai": "05", "Jun": "06",
+                          "Jul": "07", "Ago": "08", "Set": "09", "Out": "10", "Nov": "11", "Dez": "12",
+                        };
+                        const [mk, yr] = u.period.split("/");
+                        const prefix = `${yr}-${monthMap[mk]}`;
+                        return t.date.startsWith(prefix);
+                      })
+                    : [];
+                  return (
+                    <React.Fragment key={u.id}>
+                      <tr
+                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => setExpandedUploadId(isExpanded ? null : u.id)}
+                      >
+                        <td className="font-medium flex items-center gap-2">
+                          {isExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
+                          {u.filename}
+                        </td>
+                        <td>{u.bank}</td>
+                        <td className="text-muted-foreground">{u.size}</td>
+                        <td className="text-muted-foreground">{u.date}</td>
+                        <td>{u.period}</td>
+                        <td>{statusBadge(u.status)}</td>
+                      </tr>
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={6} className="p-0 bg-muted/30">
+                            {periodTxs.length === 0 ? (
+                              <p className="text-sm text-muted-foreground p-4">Nenhuma transação encontrada para este período.</p>
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="border-b border-border/50">
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Data</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Descrição</th>
+                                      <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Valor</th>
+                                      <th className="px-4 py-2 text-center text-xs font-medium text-muted-foreground">Tipo</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Classificação</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Conta Débito</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Conta Crédito</th>
+                                      <th className="px-4 py-2 text-center text-xs font-medium text-muted-foreground">Status</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {periodTxs.map((t) => (
+                                      <tr key={t.id} className="border-b border-border/30 last:border-0">
+                                        <td className="px-4 py-2 whitespace-nowrap">{t.date}</td>
+                                        <td className="px-4 py-2 max-w-[200px] truncate" title={t.description}>{t.description}</td>
+                                        <td className={`px-4 py-2 text-right whitespace-nowrap font-medium ${t.type === "credit" ? "text-cf-green" : "text-cf-red"}`}>
+                                          {t.type === "credit" ? "+" : "-"} R$ {Math.abs(t.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                        </td>
+                                        <td className="px-4 py-2 text-center">
+                                          <span className={`text-xs font-bold ${t.type === "credit" ? "text-cf-green" : "text-cf-red"}`}>
+                                            {t.type === "credit" ? "C" : "D"}
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-2 text-xs">{t.category || "—"}</td>
+                                        <td className="px-4 py-2 text-xs text-muted-foreground">{t.debitAccount || "—"}</td>
+                                        <td className="px-4 py-2 text-xs text-muted-foreground">{t.creditAccount || "—"}</td>
+                                        <td className="px-4 py-2 text-center">
+                                          {t.classifiedBy === "auto" && <span className="cf-badge-green text-[10px]">Auto</span>}
+                                          {t.classifiedBy === "pending" && <span className="cf-badge-yellow text-[10px]">Pendente</span>}
+                                          {t.classifiedBy === "client" && <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold bg-primary/10 text-primary border-primary/30">Cliente</span>}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
