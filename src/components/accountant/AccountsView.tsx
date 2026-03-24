@@ -20,7 +20,7 @@ export default function AccountsView() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 cf-stagger">
       <div>
         <h2 className="text-2xl font-bold">Plano de Contas</h2>
         <p className="text-muted-foreground text-sm mt-1">{CHART_OF_ACCOUNTS.length} contas · Padrão Domínio Sistemas</p>

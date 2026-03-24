@@ -55,7 +55,7 @@ export default function InsightsView({ client }: Props) {
   });
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 cf-stagger">
       <div>
         <h2 className="text-2xl font-bold">Insights Financeiros</h2>
         <p className="text-muted-foreground text-sm mt-1">Projeções e tendências baseadas nos seus dados — {client.name}</p>

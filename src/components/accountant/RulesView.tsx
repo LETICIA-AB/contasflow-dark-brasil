@@ -29,7 +29,7 @@ export default function RulesView() {
   const clientName = (id: string) => clients.find((c) => c.id === id)?.name ?? id;
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 cf-stagger">
       <div>
         <h2 className="text-2xl font-bold">Regras de Classificação IA</h2>
         <p className="text-muted-foreground text-sm mt-1">{CLASSIFICATION_RULES.length} regras · {memory.length} itens na memória</p>

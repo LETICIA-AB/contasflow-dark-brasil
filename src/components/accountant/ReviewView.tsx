@@ -50,7 +50,7 @@ export default function ReviewView({ client, onUpdate, onExport }: Props) {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 cf-stagger">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-2xl font-bold">{client.name}</h2>

@@ -35,7 +35,7 @@ export default function ExportView({ client, onBack }: Props) {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 cf-stagger">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <button className="cf-btn-ghost text-sm mb-2" onClick={onBack}>← Voltar</button>
