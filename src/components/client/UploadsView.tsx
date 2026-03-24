@@ -109,7 +109,7 @@ export default function UploadsView({ client, onUpdate }: Props) {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 cf-stagger">
       <div>
         <h2 className="text-2xl font-bold font-heading">Extratos Bancários</h2>
         <p className="text-muted-foreground text-sm mt-1">Envie extratos, classifique transações e acompanhe seu progresso</p>

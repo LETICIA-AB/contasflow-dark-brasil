@@ -18,7 +18,7 @@ export default function ClientListView({ clients, onSelectClient }: Props) {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 cf-stagger">
       <div>
         <h2 className="text-2xl font-bold">Carteira de Clientes</h2>
         <p className="text-muted-foreground text-sm mt-1">Visão consolidada das empresas</p>
