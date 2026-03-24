@@ -1,33 +1,22 @@
 
 
-## Limpar localStorage e Parsear Arquivos Reais
+## Expandir Transações no Histórico de Envios
 
 ### O que será feito
-
-1. **Botão "Resetar Dados"** na aba Administração para limpar o localStorage e recarregar a página (para testes rápidos)
-
-2. **Parser de arquivos OFX e CSV reais** no upload — em vez de gerar transações genéricas, o sistema lê o conteúdo do arquivo enviado e extrai as transações reais (data, descrição, valor, tipo)
-
-3. **Classificação automática** das transações extraídas usando o motor de regras já existente (`classifyTransaction`)
+Tornar cada linha do histórico de envios clicável. Ao clicar, expande uma seção abaixo mostrando todas as transações daquele período com: descrição, data, valor, classificação, conta débito/crédito e status (auto/pendente/cliente).
 
 ### Mudanças técnicas
 
-**Novo arquivo: `src/data/fileParser.ts`**
-- Função `parseOFX(content)` — extrai transações de arquivos OFX (formato bancário padrão), lendo tags `<STMTTRN>` com `<DTPOSTED>`, `<TRNAMT>`, `<MEMO>`/`<NAME>`
-- Função `parseCSV(content)` — extrai transações de CSV bancário, detectando colunas de data/descrição/valor por heurística nos cabeçalhos
-- Ambas retornam array de `{ date, description, amount, type }` que é convertido em `Transaction[]`
-
 **UploadsView.tsx**
-- Ler o conteúdo real do arquivo via `FileReader.readAsText()`
-- Chamar o parser apropriado (OFX ou CSV) baseado na extensão
-- Gerar `Transaction[]` a partir dos dados reais, aplicando `classifyTransaction` e `resolveAccounts`
-- Fallback para `generateGenericTransactions` se o parser falhar ou formato não suportado (.txt, .pdf)
-
-**AdminView.tsx**
-- Adicionar botão "Resetar Dados" que limpa as chaves `cf-v3-*` do localStorage e recarrega a página
+1. Adicionar state `expandedUploadId` para controlar qual upload está expandido
+2. Tornar cada `<tr>` do histórico clicável (cursor pointer, chevron icon)
+3. Ao clicar, filtrar `client.transactions` pelo período do upload selecionado
+4. Renderizar uma linha extra abaixo com tabela de transações contendo:
+   - Data | Descrição | Valor | Tipo (C/D) | Classificação | Conta Débito | Conta Crédito | Status (badge auto/pendente/cliente)
+5. Importar `ChevronDown`/`ChevronRight` do lucide-react para indicar estado expandido
+6. Badges coloridos para status: verde (auto), amarelo (pendente), azul (cliente)
 
 ### Resultado
-- Upload de OFX/CSV real popula transações reais na aba Conferir
-- Classificação automática funciona sobre os dados reais
-- Fácil resetar para testar do zero
+- Clique no arquivo → vê todas as transações extraídas daquele período
+- Visualização rápida sem sair da aba de envios
 
