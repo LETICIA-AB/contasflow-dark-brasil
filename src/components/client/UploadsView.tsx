@@ -5,6 +5,7 @@ import { addNotification } from "@/data/notificationStore";
 interface Props {
   client: Client;
   onUpdate: () => void;
+  onNavigate?: (view: string) => void;
 }
 
 const MONTHS = [
@@ -24,7 +25,7 @@ const MONTHS = [
 
 const CURRENT_MONTH_PERIOD = "Mar/2026";
 
-export default function UploadsView({ client, onUpdate }: Props) {
+export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
   const [uploads, setUploads] = useState<Upload[]>(() => loadUploads().filter((u) => u.clientId === client.id));
   const [period, setPeriod] = useState("Mar/2026");
   const [dragging, setDragging] = useState(false);
@@ -71,6 +72,10 @@ export default function UploadsView({ client, onUpdate }: Props) {
       saveUploads(updated);
       setUploads(updated.filter((u) => u.clientId === client.id));
       setProcessing(false);
+      // Auto-redirect to confirm view after upload
+      if (onNavigate) {
+        setTimeout(() => onNavigate("confirm"), 1000);
+      }
     }, 1500);
   };
 
@@ -198,7 +203,7 @@ export default function UploadsView({ client, onUpdate }: Props) {
                 ⚠ Você tem {pending.length} transação(ões) pendente(s) de classificação.
               </p>
               <p className="text-cf-yellow/80 text-xs mt-1">
-                Classifique todas as transações na aba <strong>"Classificar"</strong> para concluir o envio deste período. Seu progresso é salvo automaticamente.
+                Classifique todas as transações na aba <strong>"Conferir"</strong> para concluir o envio deste período. Seu progresso é salvo automaticamente.
               </p>
             </div>
             <button className="cf-btn-secondary opacity-50 cursor-not-allowed" disabled>

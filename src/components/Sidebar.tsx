@@ -14,13 +14,14 @@ interface SidebarProps {
 
 const clientTabs = [
   { id: "uploads", label: "Envios", icon: "📤" },
-  { id: "classify", label: "Classificar", icon: "🏷️" },
+  { id: "confirm", label: "Conferir", icon: "✅" },
   { id: "dashboard", label: "Dashboard", icon: "📊" },
   { id: "insights", label: "Insights", icon: "💡" },
 ];
 
 const accountantTabs = [
   { id: "clients", label: "Carteira", icon: "🏢" },
+  { id: "panel", label: "Painel Geral", icon: "📊" },
   { id: "rules", label: "Regras IA", icon: "🤖" },
   { id: "accounts", label: "Plano de Contas", icon: "📋" },
   { id: "admin", label: "Admin", icon: "⚙️" },
