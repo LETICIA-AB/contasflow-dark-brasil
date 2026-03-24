@@ -56,7 +56,7 @@ export default function Sidebar({ session, client, activeView, onNavigate, onLog
           ${open ? "translate-x-0" : "-translate-x-full"}
         `}
         style={{
-          background: "linear-gradient(180deg, hsl(222 38% 6%) 0%, hsl(222 38% 4.5%) 100%)",
+          background: "var(--sidebar-bg)",
         }}
       >
         {/* Brand */}
