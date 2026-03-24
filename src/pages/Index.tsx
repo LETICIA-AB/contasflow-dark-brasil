@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { loadClients, type Session, type Client } from "@/data/store";
 import Login from "@/components/Login";
 import Sidebar from "@/components/Sidebar";
+import NotificationPanel from "@/components/NotificationPanel";
 import UploadsView from "@/components/client/UploadsView";
 import ClassifyView from "@/components/client/ClassifyView";
 import DashboardView from "@/components/client/DashboardView";
