@@ -120,9 +120,10 @@ export default function Sidebar({ session, client, activeView, onNavigate, onLog
         <div className="p-4 border-t border-border/40 flex items-center justify-between">
           <button
             onClick={onLogout}
-            className="cf-btn-ghost text-sm justify-start opacity-70 hover:opacity-100"
+            className="cf-btn-ghost text-sm justify-start opacity-70 hover:opacity-100 flex items-center gap-2"
           >
-            ← Sair
+            <LogOut className="w-4 h-4" />
+            Sair
           </button>
           <ThemeToggle />
         </div>
