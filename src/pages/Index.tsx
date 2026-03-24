@@ -4,10 +4,11 @@ import Login from "@/components/Login";
 import Sidebar from "@/components/Sidebar";
 import NotificationPanel from "@/components/NotificationPanel";
 import UploadsView from "@/components/client/UploadsView";
-import ClassifyView from "@/components/client/ClassifyView";
+import ConfirmView from "@/components/client/ConfirmView";
 import DashboardView from "@/components/client/DashboardView";
 import InsightsView from "@/components/client/InsightsView";
 import ClientListView from "@/components/accountant/ClientListView";
+import AccountantDashboardView from "@/components/accountant/AccountantDashboardView";
 import AdminView from "@/components/accountant/AdminView";
 import ReviewView from "@/components/accountant/ReviewView";
 import ExportView from "@/components/accountant/ExportView";
@@ -145,8 +146,8 @@ export default function Index() {
   const renderView = () => {
     if (session.type === "client" && currentClient) {
       switch (view) {
-        case "uploads": return <UploadsView client={currentClient} onUpdate={refresh} />;
-        case "classify": return <ClassifyView client={currentClient} onUpdate={refresh} />;
+        case "uploads": return <UploadsView client={currentClient} onUpdate={refresh} onNavigate={setView} />;
+        case "confirm": return <ConfirmView client={currentClient} onUpdate={refresh} />;
         case "dashboard": return <DashboardView client={currentClient} />;
         case "insights": return <InsightsView client={currentClient} />;
       }
@@ -154,8 +155,9 @@ export default function Index() {
     if (isAccountant) {
       switch (view) {
         case "clients": return <ClientListView clients={clients} onSelectClient={(id) => setReviewClientId(id)} />;
+        case "panel": return <AccountantDashboardView clients={clients} />;
         case "rules": return <RulesView />;
-        case "accounts": return <AccountsView />;
+        case "accounts": return <AccountsView clients={clients} onUpdate={refresh} />;
         case "admin": return <AdminView clients={clients} onUpdate={refresh} />;
       }
     }
