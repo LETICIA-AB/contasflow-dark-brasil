@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { type Client, type User, type Upload, loadUsers, saveUsers, loadUploads, loadClients, saveClients, formatCNPJ, CATEGORIES } from "@/data/store";
 import { loadBanks, saveBanks, addBank, type BankEntry } from "@/data/bankStore";
-import { CHART_OF_ACCOUNTS, CATEGORY_DEBIT_MAP, CATEGORY_CREDIT_MAP } from "@/data/chartOfAccounts";
+import { CHART_OF_ACCOUNTS, CATEGORY_DEBIT_MAP, CATEGORY_CREDIT_MAP, type Account } from "@/data/chartOfAccounts";
+import { getActiveChart, saveCustomChart, clearCustomChart } from "@/data/chartStore";
+import * as XLSX from "xlsx";
 
 interface Props {
   clients: Client[];
