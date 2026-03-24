@@ -35,6 +35,7 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
   const [dragging, setDragging] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [expandedUploadId, setExpandedUploadId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const periods = ["Out/2025", "Nov/2025", "Dez/2025", "Jan/2026", "Fev/2026", "Mar/2026"];
