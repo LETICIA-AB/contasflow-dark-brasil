@@ -81,9 +81,15 @@ export default function Index() {
 
   if (!session) return <Login onLogin={handleLogin} />;
 
+  const isAccountant = session.type === "accountant";
   const currentClient = session.type === "client"
     ? clients.find((c) => c.id === session.clientId) ?? null
     : null;
+
+  const handleNotificationNav = (clientId: string) => {
+    setReviewClientId(clientId);
+    setView("clients");
+  };
 
   const sidebarProps = {
     session,
@@ -94,14 +100,21 @@ export default function Index() {
     onClose: () => setSidebarOpen(false),
   };
 
-  if (session.type === "accountant" && exportClientId) {
+  const headerProps = {
+    onToggle: () => setSidebarOpen(true),
+    isAccountant,
+    onNavigateToClient: handleNotificationNav,
+  };
+
+  if (isAccountant && exportClientId) {
     const expClient = clients.find((c) => c.id === exportClientId);
     if (expClient) {
       return (
         <div className="flex h-screen overflow-hidden">
           <Sidebar {...sidebarProps} activeView="clients" onNavigate={(v) => { setExportClientId(null); setReviewClientId(null); setView(v); }} />
           <div className="flex-1 flex flex-col overflow-hidden">
-            <MobileHeader onToggle={() => setSidebarOpen(true)} />
+            <MobileHeader {...headerProps} />
+            <DesktopHeader isAccountant onNavigateToClient={handleNotificationNav} />
             <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
               <ExportView client={expClient} onBack={() => setExportClientId(null)} />
             </main>
@@ -111,14 +124,15 @@ export default function Index() {
     }
   }
 
-  if (session.type === "accountant" && reviewClientId) {
+  if (isAccountant && reviewClientId) {
     const revClient = clients.find((c) => c.id === reviewClientId);
     if (revClient) {
       return (
         <div className="flex h-screen overflow-hidden">
           <Sidebar {...sidebarProps} activeView="clients" onNavigate={(v) => { setReviewClientId(null); setView(v); }} />
           <div className="flex-1 flex flex-col overflow-hidden">
-            <MobileHeader onToggle={() => setSidebarOpen(true)} />
+            <MobileHeader {...headerProps} />
+            <DesktopHeader isAccountant onNavigateToClient={handleNotificationNav} />
             <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
               <ReviewView client={revClient} onUpdate={refresh} onExport={(id) => setExportClientId(id)} />
             </main>
@@ -137,7 +151,7 @@ export default function Index() {
         case "insights": return <InsightsView client={currentClient} />;
       }
     }
-    if (session.type === "accountant") {
+    if (isAccountant) {
       switch (view) {
         case "clients": return <ClientListView clients={clients} onSelectClient={(id) => setReviewClientId(id)} />;
         case "rules": return <RulesView />;
@@ -152,7 +166,8 @@ export default function Index() {
     <div className="flex h-screen overflow-hidden">
       <Sidebar {...sidebarProps} onNavigate={setView} />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <MobileHeader onToggle={() => setSidebarOpen(true)} />
+        <MobileHeader {...headerProps} />
+        <DesktopHeader isAccountant={isAccountant} onNavigateToClient={handleNotificationNav} />
         <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
           {renderView()}
         </main>
