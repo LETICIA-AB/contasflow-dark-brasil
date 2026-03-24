@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { type Client, type User, type Upload, loadUsers, saveUsers, loadUploads, loadClients, saveClients, formatCNPJ, CATEGORIES } from "@/data/store";
 import { loadBanks, saveBanks, addBank, type BankEntry } from "@/data/bankStore";
 import { CHART_OF_ACCOUNTS, CATEGORY_DEBIT_MAP, CATEGORY_CREDIT_MAP, type Account } from "@/data/chartOfAccounts";
-import { getActiveChart, saveCustomChart, clearCustomChart } from "@/data/chartStore";
+import { getActiveChart, saveCustomChart, clearCustomChart, saveClientChart, loadClientChart, removeClientChart, listAllClientCharts, findDuplicateChart, getActiveChartForClient } from "@/data/chartStore";
 import * as XLSX from "xlsx";
 
 interface Props {
@@ -22,7 +22,6 @@ export default function AdminView({ clients, onUpdate }: Props) {
   const [banks, setBanks] = useState<BankEntry[]>(loadBanks);
   const [newBankName, setNewBankName] = useState("");
   const [newBankCode, setNewBankCode] = useState("");
-  const [chartClientId, setChartClientId] = useState(clients[0]?.id || "");
 
   const refreshUsers = () => setUsers(loadUsers());
 
@@ -59,7 +58,6 @@ export default function AdminView({ clients, onUpdate }: Props) {
       if (u) { u.cnpj = formCnpj; u.password = formPassword; u.clientId = formClientId; }
     }
     saveUsers(allUsers);
-    // Update client banks
     if (formClientId) {
       const allClients = loadClients();
       const c = allClients.find((cl) => cl.id === formClientId);
@@ -107,23 +105,6 @@ export default function AdminView({ clients, onUpdate }: Props) {
   const deleteBank = (id: string) => {
     saveBanks(loadBanks().filter((b) => b.id !== id));
     setBanks(loadBanks());
-  };
-
-  // Chart overrides
-  const chartClient = clients.find((c) => c.id === chartClientId);
-  const handleOverride = (category: string, field: "debit" | "credit", value: string) => {
-    const allClients = loadClients();
-    const c = allClients.find((cl) => cl.id === chartClientId);
-    if (!c) return;
-    if (!c.chartOverrides) c.chartOverrides = {};
-    if (!c.chartOverrides[category]) c.chartOverrides[category] = { debit: "", credit: "" };
-    c.chartOverrides[category][field] = value;
-    // Clean empty
-    if (!c.chartOverrides[category].debit && !c.chartOverrides[category].credit) {
-      delete c.chartOverrides[category];
-    }
-    saveClients(allClients);
-    onUpdate();
   };
 
   const clientName = (cid: string) => clients.find((c) => c.id === cid)?.name ?? "—";
@@ -185,7 +166,6 @@ export default function AdminView({ clients, onUpdate }: Props) {
                 </div>
               </div>
 
-              {/* Bank checkboxes */}
               <div>
                 <label className="block text-sm text-muted-foreground mb-2">Bancos utilizados</label>
                 <div className="flex flex-wrap gap-2">
@@ -319,51 +299,41 @@ export default function AdminView({ clients, onUpdate }: Props) {
       )}
 
       {/* ── CHART OF ACCOUNTS PER CLIENT ── */}
-      {subTab === "chart" && <ChartTab clients={clients} chartClientId={chartClientId} setChartClientId={setChartClientId} onUpdate={onUpdate} />}
+      {subTab === "chart" && <ChartTab clients={clients} onUpdate={onUpdate} />}
     </div>
   );
 }
 
 // ── Chart Tab Component ──
-function ChartTab({ clients, chartClientId, setChartClientId, onUpdate }: {
+function ChartTab({ clients, onUpdate }: {
   clients: Client[];
-  chartClientId: string;
-  setChartClientId: (id: string) => void;
   onUpdate: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [importPreview, setImportPreview] = useState<Account[] | null>(null);
   const [importError, setImportError] = useState("");
-  const [activeChart, setActiveChart] = useState<Account[]>(getActiveChart);
   const [importMode, setImportMode] = useState<"preview" | "done" | null>(null);
+  const [targetClientId, setTargetClientId] = useState(clients[0]?.id || "");
+  const [duplicateClients, setDuplicateClients] = useState<string[]>([]);
+  const [replicateTarget, setReplicateTarget] = useState("");
+  const [overrideClientId, setOverrideClientId] = useState(clients[0]?.id || "");
+  const [, setTick] = useState(0);
 
-  const chartClient = clients.find((c) => c.id === chartClientId);
-
-  const handleOverride = (category: string, field: "debit" | "credit", value: string) => {
-    const allClients = loadClients();
-    const c = allClients.find((cl) => cl.id === chartClientId);
-    if (!c) return;
-    if (!c.chartOverrides) c.chartOverrides = {};
-    if (!c.chartOverrides[category]) c.chartOverrides[category] = { debit: "", credit: "" };
-    c.chartOverrides[category][field] = value;
-    if (!c.chartOverrides[category].debit && !c.chartOverrides[category].credit) {
-      delete c.chartOverrides[category];
-    }
-    saveClients(allClients);
-    onUpdate();
-  };
+  const clientCharts = listAllClientCharts();
+  const overrideClient = clients.find((c) => c.id === overrideClientId);
+  const activeChartForOverride = getActiveChartForClient(overrideClientId);
 
   const parseType = (val: string): "A" | "R" | "D" => {
     const v = (val || "").toString().trim().toUpperCase();
     if (v === "A" || v === "ATIVO" || v === "ASSET") return "A";
     if (v === "R" || v === "RECEITA" || v === "REVENUE") return "R";
-    if (v === "D" || v === "DESPESA" || v === "EXPENSE") return "D";
     return "D";
   };
 
   const handleFileImport = (file: File) => {
     setImportError("");
     setImportPreview(null);
+    setDuplicateClients([]);
 
     const ext = file.name.split(".").pop()?.toLowerCase();
     if (!["csv", "xlsx", "xls"].includes(ext || "")) {
@@ -384,10 +354,7 @@ function ChartTab({ clients, chartClientId, setChartClientId, onUpdate }: {
           return;
         }
 
-        // Auto-detect columns
-        const firstRow = rows[0];
-        const keys = Object.keys(firstRow);
-
+        const keys = Object.keys(rows[0]);
         const findCol = (patterns: string[]) =>
           keys.find((k) => patterns.some((p) => k.toLowerCase().includes(p))) || "";
 
@@ -405,60 +372,116 @@ function ChartTab({ clients, chartClientId, setChartClientId, onUpdate }: {
         })).filter((a) => a.code && a.name);
 
         if (accounts.length === 0) {
-          setImportError(`Nenhuma conta válida encontrada. Colunas detectadas: ${keys.join(", ")}. Esperado: código, nome, tipo (A/R/D), grupo.`);
+          setImportError(`Nenhuma conta válida. Colunas detectadas: ${keys.join(", ")}`);
           return;
         }
 
+        // Check for duplicates
+        const dupes = findDuplicateChart(accounts);
+        setDuplicateClients(dupes);
         setImportPreview(accounts);
         setImportMode("preview");
       } catch {
-        setImportError("Erro ao processar o arquivo. Verifique o formato.");
+        setImportError("Erro ao processar o arquivo.");
       }
     };
     reader.readAsArrayBuffer(file);
   };
 
   const confirmImport = () => {
-    if (!importPreview) return;
-    saveCustomChart(importPreview);
-    setActiveChart(importPreview);
+    if (!importPreview || !targetClientId) return;
+    saveClientChart(targetClientId, importPreview);
     setImportPreview(null);
     setImportMode("done");
+    setDuplicateClients([]);
+    setTick((t) => t + 1);
     setTimeout(() => setImportMode(null), 3000);
   };
 
-  const handleResetChart = () => {
-    if (!window.confirm("Restaurar o plano de contas padrão? Isso remove o plano importado.")) return;
-    clearCustomChart();
-    setActiveChart(CHART_OF_ACCOUNTS);
+  const handleReplicate = () => {
+    if (!replicateTarget) return;
+    const sourceChart = loadClientChart(targetClientId);
+    if (!sourceChart) return;
+    saveClientChart(replicateTarget, sourceChart);
+    setReplicateTarget("");
+    setTick((t) => t + 1);
   };
 
-  const isCustom = activeChart !== CHART_OF_ACCOUNTS && activeChart.length !== CHART_OF_ACCOUNTS.length;
+  const handleRemoveClientChart = (clientId: string) => {
+    if (!window.confirm("Remover plano personalizado? A empresa usará o plano padrão.")) return;
+    removeClientChart(clientId);
+    setTick((t) => t + 1);
+  };
+
+  const handleOverride = (category: string, field: "debit" | "credit", value: string) => {
+    const allClients = loadClients();
+    const c = allClients.find((cl) => cl.id === overrideClientId);
+    if (!c) return;
+    if (!c.chartOverrides) c.chartOverrides = {};
+    if (!c.chartOverrides[category]) c.chartOverrides[category] = { debit: "", credit: "" };
+    c.chartOverrides[category][field] = value;
+    if (!c.chartOverrides[category].debit && !c.chartOverrides[category].credit) {
+      delete c.chartOverrides[category];
+    }
+    saveClients(allClients);
+    onUpdate();
+  };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Client chart summary */}
+      <div className="cf-card p-0 overflow-hidden">
+        <div className="px-5 py-4 border-b border-border">
+          <h3 className="font-semibold">📋 Plano de Contas por Empresa</h3>
+          <p className="text-xs text-muted-foreground mt-1">Cada empresa pode ter seu próprio plano de contas importado</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="cf-table">
+            <thead>
+              <tr><th>Empresa</th><th>Plano</th><th>Qtd Contas</th><th>Ações</th></tr>
+            </thead>
+            <tbody>
+              {clients.map((c) => {
+                const clientChart = clientCharts.find((cc) => cc.clientId === c.id);
+                const hasCustom = !!clientChart;
+                return (
+                  <tr key={c.id}>
+                    <td className="font-medium">{c.name}</td>
+                    <td>
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${hasCustom ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground"}`}>
+                        {hasCustom ? "Personalizado" : "Padrão"}
+                      </span>
+                    </td>
+                    <td className="font-mono text-sm">{hasCustom ? clientChart.accountCount : CHART_OF_ACCOUNTS.length}</td>
+                    <td>
+                      {hasCustom && (
+                        <button className="cf-btn-ghost text-xs py-1 px-2 text-cf-red" onClick={() => handleRemoveClientChart(c.id)}>
+                          Remover
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Import section */}
       <div className="cf-card border-primary/30 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-semibold">📥 Importar Plano de Contas</h3>
-            <p className="text-xs text-muted-foreground mt-1">
-              Importe um arquivo CSV ou Excel com as colunas: <span className="font-mono text-primary">código, nome, tipo (A/R/D), grupo</span>
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {isCustom && (
-              <button className="cf-btn-ghost text-xs text-cf-yellow" onClick={handleResetChart}>
-                ↩ Restaurar padrão
-              </button>
-            )}
-            <span className={`cf-badge ${isCustom ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground"}`}>
-              {activeChart.length} contas {isCustom ? "(importado)" : "(padrão)"}
-            </span>
-          </div>
-        </div>
+        <h3 className="font-semibold">📥 Importar Plano de Contas</h3>
+        <p className="text-xs text-muted-foreground">
+          Selecione a empresa destino e importe um CSV/Excel com: <span className="font-mono text-primary">código, nome, tipo (A/R/D), grupo</span>
+        </p>
 
-        <div className="flex gap-3 flex-wrap items-center">
+        <div className="flex gap-3 flex-wrap items-end">
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1">Empresa destino</label>
+            <select className="cf-select w-56" value={targetClientId} onChange={(e) => setTargetClientId(e.target.value)}>
+              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
           <button className="cf-btn-primary" onClick={() => fileRef.current?.click()}>
             📁 Selecionar arquivo
           </button>
@@ -494,22 +517,32 @@ function ChartTab({ clients, chartClientId, setChartClientId, onUpdate }: {
           </div>
         )}
 
+        {/* Duplicate detection */}
+        {duplicateClients.length > 0 && importPreview && (
+          <div className="px-4 py-3 rounded-lg bg-cf-blue/10 border border-cf-blue/30 space-y-2">
+            <p className="text-cf-blue text-sm font-medium">
+              ℹ Este plano já está vinculado a: {duplicateClients.map((id) => clientName(id)).join(", ")}
+            </p>
+            <p className="text-cf-blue/80 text-xs">Você pode continuar importando para a empresa selecionada ou replicar para outra.</p>
+          </div>
+        )}
+
         {/* Preview */}
         {importPreview && importMode === "preview" && (
           <div className="space-y-3">
-            <div className="px-3 py-2 rounded-lg bg-cf-blue/10 border border-cf-blue/30">
-              <p className="text-cf-blue text-sm font-medium">
-                📋 Preview: {importPreview.length} contas encontradas —
-                {" "}{importPreview.filter((a) => a.type === "A").length} Ativos,
-                {" "}{importPreview.filter((a) => a.type === "R").length} Receitas,
-                {" "}{importPreview.filter((a) => a.type === "D").length} Despesas
+            <div className="px-3 py-2 rounded-lg bg-cf-green/10 border border-cf-green/30">
+              <p className="text-cf-green text-sm font-medium">
+                📋 {importPreview.length} contas — {importPreview.filter((a) => a.type === "A").length} Ativos, {importPreview.filter((a) => a.type === "R").length} Receitas, {importPreview.filter((a) => a.type === "D").length} Despesas
+              </p>
+              <p className="text-cf-green/80 text-xs mt-1">
+                Vinculando a: <strong>{clientName(targetClientId)}</strong>
               </p>
             </div>
-            <div className="cf-card p-0 overflow-hidden max-h-64 overflow-y-auto">
+            <div className="cf-card p-0 overflow-hidden max-h-48 overflow-y-auto">
               <table className="cf-table">
                 <thead><tr><th>Código</th><th>Nome</th><th>Tipo</th><th>Grupo</th></tr></thead>
                 <tbody>
-                  {importPreview.slice(0, 30).map((a, i) => (
+                  {importPreview.slice(0, 20).map((a, i) => (
                     <tr key={i}>
                       <td className="font-mono text-primary">{a.code}</td>
                       <td className="font-medium">{a.name}</td>
@@ -521,102 +554,133 @@ function ChartTab({ clients, chartClientId, setChartClientId, onUpdate }: {
                       <td className="text-muted-foreground text-xs">{a.group}</td>
                     </tr>
                   ))}
-                  {importPreview.length > 30 && (
-                    <tr><td colSpan={4} className="text-center text-muted-foreground text-xs py-2">... e mais {importPreview.length - 30} contas</td></tr>
+                  {importPreview.length > 20 && (
+                    <tr><td colSpan={4} className="text-center text-muted-foreground text-xs py-2">... e mais {importPreview.length - 20}</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
             <div className="flex gap-3">
               <button className="cf-btn-primary" onClick={confirmImport}>
-                ✓ Confirmar importação ({importPreview.length} contas)
+                ✓ Vincular a {clientName(targetClientId)} ({importPreview.length} contas)
               </button>
-              <button className="cf-btn-secondary" onClick={() => { setImportPreview(null); setImportMode(null); }}>Cancelar</button>
+              <button className="cf-btn-secondary" onClick={() => { setImportPreview(null); setImportMode(null); setDuplicateClients([]); }}>Cancelar</button>
             </div>
           </div>
         )}
 
         {importMode === "done" && (
           <div className="px-3 py-2 rounded-lg bg-cf-green/10 border border-cf-green/30">
-            <p className="text-cf-green text-sm font-medium">✓ Plano de contas importado com sucesso!</p>
+            <p className="text-cf-green text-sm font-medium">✓ Plano vinculado com sucesso a {clientName(targetClientId)}!</p>
           </div>
         )}
       </div>
 
-      {/* Overrides per client */}
-      <div className="flex items-center gap-3">
-        <label className="text-sm text-muted-foreground">Vincular por empresa:</label>
-        <select className="cf-select w-64" value={chartClientId} onChange={(e) => setChartClientId(e.target.value)}>
-          {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-      </div>
-      <p className="text-xs text-muted-foreground">Sobrescreva as contas contábeis padrão para esta empresa. Deixe em branco para usar o padrão.</p>
+      {/* Replicate */}
+      {clientCharts.length > 0 && (
+        <div className="cf-card space-y-3">
+          <h3 className="font-semibold text-sm">🔄 Replicar plano para outra empresa</h3>
+          <div className="flex gap-3 flex-wrap items-end">
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Copiar de</label>
+              <select className="cf-select w-52" value={targetClientId} onChange={(e) => setTargetClientId(e.target.value)}>
+                {clients.filter((c) => clientCharts.some((cc) => cc.clientId === c.id)).map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Para</label>
+              <select className="cf-select w-52" value={replicateTarget} onChange={(e) => setReplicateTarget(e.target.value)}>
+                <option value="">Selecionar...</option>
+                {clients.filter((c) => c.id !== targetClientId).map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <button className="cf-btn-primary text-sm" onClick={handleReplicate} disabled={!replicateTarget}>
+              Replicar
+            </button>
+          </div>
+        </div>
+      )}
 
-      <div className="cf-card p-0 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="cf-table">
-            <thead>
-              <tr>
-                <th>Categoria</th>
-                <th>Conta Débito (padrão)</th>
-                <th>Conta Débito (empresa)</th>
-                <th>Conta Crédito (padrão)</th>
-                <th>Conta Crédito (empresa)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {CATEGORIES.map((cat) => {
-                const defaultDebit = CATEGORY_DEBIT_MAP[cat] || "";
-                const defaultCredit = CATEGORY_CREDIT_MAP[cat] || "";
-                const override = chartClient?.chartOverrides?.[cat];
-                return (
-                  <tr key={cat}>
-                    <td className="font-medium">{cat}</td>
-                    <td className="font-mono text-xs text-muted-foreground">{defaultDebit || "—"}</td>
-                    <td>
-                      <select
-                        className="cf-select py-1 px-2 text-xs"
-                        value={override?.debit || ""}
-                        onChange={(e) => handleOverride(cat, "debit", e.target.value)}
-                      >
-                        <option value="">Padrão</option>
-                        {activeChart.filter((a) => a.type === "D" || a.type === "A").map((a) => (
-                          <option key={a.code} value={a.code}>{a.code} — {a.name}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="font-mono text-xs text-muted-foreground">{defaultCredit || "—"}</td>
-                    <td>
-                      <select
-                        className="cf-select py-1 px-2 text-xs"
-                        value={override?.credit || ""}
-                        onChange={(e) => handleOverride(cat, "credit", e.target.value)}
-                      >
-                        <option value="">Padrão</option>
-                        {activeChart.filter((a) => a.type === "R" || a.type === "A").map((a) => (
-                          <option key={a.code} value={a.code}>{a.code} — {a.name}</option>
-                        ))}
-                      </select>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      {/* Overrides per client */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <label className="text-sm text-muted-foreground">Overrides por empresa:</label>
+          <select className="cf-select w-64" value={overrideClientId} onChange={(e) => setOverrideClientId(e.target.value)}>
+            {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <p className="text-xs text-muted-foreground">Sobrescreva as contas contábeis padrão para esta empresa.</p>
+
+        <div className="cf-card p-0 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="cf-table">
+              <thead>
+                <tr>
+                  <th>Categoria</th>
+                  <th>Débito (padrão)</th>
+                  <th>Débito (empresa)</th>
+                  <th>Crédito (padrão)</th>
+                  <th>Crédito (empresa)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {CATEGORIES.map((cat) => {
+                  const defaultDebit = CATEGORY_DEBIT_MAP[cat] || "";
+                  const defaultCredit = CATEGORY_CREDIT_MAP[cat] || "";
+                  const override = overrideClient?.chartOverrides?.[cat];
+                  return (
+                    <tr key={cat}>
+                      <td className="font-medium">{cat}</td>
+                      <td className="font-mono text-xs text-muted-foreground">{defaultDebit || "—"}</td>
+                      <td>
+                        <select
+                          className="cf-select py-1 px-2 text-xs"
+                          value={override?.debit || ""}
+                          onChange={(e) => handleOverride(cat, "debit", e.target.value)}
+                        >
+                          <option value="">Padrão</option>
+                          {activeChartForOverride.filter((a) => a.type === "D" || a.type === "A").map((a) => (
+                            <option key={a.code} value={a.code}>{a.code} — {a.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="font-mono text-xs text-muted-foreground">{defaultCredit || "—"}</td>
+                      <td>
+                        <select
+                          className="cf-select py-1 px-2 text-xs"
+                          value={override?.credit || ""}
+                          onChange={(e) => handleOverride(cat, "credit", e.target.value)}
+                        >
+                          <option value="">Padrão</option>
+                          {activeChartForOverride.filter((a) => a.type === "R" || a.type === "A").map((a) => (
+                            <option key={a.code} value={a.code}>{a.code} — {a.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
       {/* Full chart view */}
       <div className="cf-card p-0 overflow-hidden">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <h3 className="font-semibold">Plano de Contas Ativo</h3>
-          <span className="text-xs text-muted-foreground">{activeChart.length} contas</span>
+          <h3 className="font-semibold">Plano Ativo — {clientName(overrideClientId)}</h3>
+          <span className="text-xs text-muted-foreground">{activeChartForOverride.length} contas</span>
         </div>
         <div className="overflow-x-auto max-h-96 overflow-y-auto">
           <table className="cf-table">
             <thead><tr><th>Seq</th><th>Código</th><th>Nome</th><th>Tipo</th><th>Grupo</th></tr></thead>
             <tbody>
-              {activeChart.map((a) => (
+              {activeChartForOverride.map((a) => (
                 <tr key={a.code}>
                   <td className="text-muted-foreground text-xs">{a.seq}</td>
                   <td className="font-mono text-primary font-bold">{a.code}</td>
@@ -635,4 +699,8 @@ function ChartTab({ clients, chartClientId, setChartClientId, onUpdate }: {
       </div>
     </div>
   );
+
+  function clientName(id: string) {
+    return clients.find((c) => c.id === id)?.name ?? "—";
+  }
 }
