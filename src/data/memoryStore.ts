@@ -57,7 +57,8 @@ export function saveToMemory(
   category: string,
   debitAccount: string,
   creditAccount: string,
-  clientId: string
+  clientId: string,
+  clientDescription?: string
 ) {
   const normalized = normalizeDescription(desc);
   const memory = loadMemory();
