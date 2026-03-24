@@ -95,14 +95,28 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
       // Parse real transactions from files
       let allParsed: import("@/data/fileParser").ParsedTransaction[] = [];
       for (const { file, content } of results) {
-        if (!content) continue;
+        if (!content) {
+          console.log(`[UploadsView] Arquivo "${file.name}" sem conteúdo`);
+          continue;
+        }
         const ext = file.name.toLowerCase().split(".").pop() || "";
+        console.log(`[UploadsView] Processando "${file.name}" (ext: ${ext}, tamanho: ${content.length} chars)`);
+        console.log(`[UploadsView] Primeiros 500 chars:`, content.substring(0, 500));
         if (ext === "ofx") {
-          allParsed = [...allParsed, ...parseOFX(content)];
+          const parsed = parseOFX(content);
+          console.log(`[UploadsView] OFX parser encontrou ${parsed.length} transações`);
+          if (parsed.length > 0) console.log(`[UploadsView] Exemplo:`, parsed[0]);
+          allParsed = [...allParsed, ...parsed];
         } else if (ext === "csv" || ext === "txt") {
-          allParsed = [...allParsed, ...parseCSV(content)];
+          const parsed = parseCSV(content);
+          console.log(`[UploadsView] CSV parser encontrou ${parsed.length} transações`);
+          if (parsed.length > 0) console.log(`[UploadsView] Exemplo:`, parsed[0]);
+          allParsed = [...allParsed, ...parsed];
+        } else {
+          console.log(`[UploadsView] Extensão "${ext}" não suportada para parsing`);
         }
       }
+      console.log(`[UploadsView] Total de transações parseadas: ${allParsed.length}`);
 
       const allClients = loadClients();
       const c = allClients.find((cl) => cl.id === client.id);
