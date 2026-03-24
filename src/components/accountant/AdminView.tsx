@@ -35,7 +35,6 @@ export default function AdminView({ clients, onUpdate }: Props) {
     setFormCnpj("");
     setFormPassword("");
     setFormClientId("");
-    setFormBanks([]);
   };
 
   const startEdit = (u: User) => {
