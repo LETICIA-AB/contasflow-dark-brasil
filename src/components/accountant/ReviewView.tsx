@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { CATEGORIES, type Client, type Transaction, type ValidationFlag, loadClients, saveClients } from "@/data/store";
 import { runValidation, getValidationSummary } from "@/data/validationEngine";
 import { ShieldCheck, Zap, AlertCircle, AlertTriangle, Info, Check, X, Flag, StickyNote, Download, User, Brain, Clock, PenLine } from "lucide-react";
+import ReconciliationAuditLayers, { AuditLayersSummaryCard } from "./ReconciliationAuditLayers";
 
 interface Props {
   client: Client;
@@ -225,6 +226,9 @@ export default function ReviewView({ client, onUpdate, onExport }: Props) {
         </div>
       </div>
 
+      {/* 4-Layer Reconciliation Audit Summary */}
+      <AuditLayersSummaryCard transactions={validatedTxs} />
+
       {/* Filter tabs */}
       <div className="flex gap-2 flex-wrap">
         {(["all", "flagged", "validated", "pending"] as TabFilter[]).map((tab) => {
@@ -283,6 +287,9 @@ export default function ReviewView({ client, onUpdate, onExport }: Props) {
 
                       {isExpanded && (
                         <div className="mt-3 space-y-3 animate-fade-in">
+                          {/* 4-layer reconciliation audit trail */}
+                          <ReconciliationAuditLayers transaction={tx} />
+
                           {hasFlags && (
                             <div className="space-y-1.5">
                               {tx.validationFlags!.map((flag, i) => (

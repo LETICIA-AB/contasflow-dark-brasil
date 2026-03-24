@@ -5,6 +5,16 @@ export type ValidationFlag = {
   message: string;
 };
 
+export type AuditLayerStatus = "pass" | "skip" | "pending" | "override";
+
+export interface AuditLayerData {
+  layer: "input" | "automation" | "ai_suggestion" | "client_description";
+  label: string;
+  sublabel: string;
+  status: AuditLayerStatus;
+  details: Record<string, string | number | undefined>;
+}
+
 export interface Transaction {
   id: string;
   date: string;
