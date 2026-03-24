@@ -132,9 +132,6 @@ export default function Login({ onLogin }: LoginProps) {
             Entrar
           </button>
 
-          <p className="text-xs text-muted-foreground text-center pt-1">
-            {mode === "client" ? "Demo: 12.345.678/0001-90 · hotel123" : "Demo: contasflow"}
-          </p>
         </form>
       </div>
     </div>
