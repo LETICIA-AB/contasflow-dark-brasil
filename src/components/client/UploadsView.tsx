@@ -25,7 +25,7 @@ const MONTHS = [
 
 const CURRENT_MONTH_PERIOD = "Mar/2026";
 
-export default function UploadsView({ client, onUpdate }: Props) {
+export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
   const [uploads, setUploads] = useState<Upload[]>(() => loadUploads().filter((u) => u.clientId === client.id));
   const [period, setPeriod] = useState("Mar/2026");
   const [dragging, setDragging] = useState(false);
