@@ -1,5 +1,6 @@
 import type { Client } from "@/data/store";
 import { resolveAccounts } from "@/data/chartOfAccounts";
+import { Download, Lightbulb, ArrowLeft } from "lucide-react";
 
 interface Props {
   client: Client;
@@ -38,12 +39,14 @@ export default function ExportView({ client, onBack }: Props) {
     <div className="space-y-6 cf-stagger">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <button className="cf-btn-ghost text-sm mb-2" onClick={onBack}>← Voltar</button>
+          <button className="cf-btn-ghost text-sm mb-2 flex items-center gap-1" onClick={onBack}>
+            <ArrowLeft className="w-4 h-4" /> Voltar
+          </button>
           <h2 className="text-2xl font-bold">Exportação Domínio</h2>
           <p className="text-muted-foreground text-sm mt-1">{client.name} · {txs.length} lançamentos</p>
         </div>
-        <button className="cf-btn-primary" onClick={handleDownload}>
-          📥 Baixar {filename}
+        <button className="cf-btn-primary flex items-center gap-2" onClick={handleDownload}>
+          <Download className="w-4 h-4" /> Baixar {filename}
         </button>
       </div>
 
@@ -66,9 +69,10 @@ export default function ExportView({ client, onBack }: Props) {
       </div>
 
       {/* RPA notice */}
-      <div className="cf-card border-cf-blue/30 bg-cf-blue/5">
+      <div className="cf-card border-cf-blue/30 bg-cf-blue/5 flex items-start gap-2">
+        <Lightbulb className="w-4 h-4 text-cf-blue shrink-0 mt-0.5" />
         <p className="text-cf-blue text-sm">
-          💡 Em breve: importação automática via RPA direto no Domínio Sistemas, sem download manual.
+          Em breve: importação automática via RPA direto no Domínio Sistemas, sem download manual.
         </p>
       </div>
     </div>

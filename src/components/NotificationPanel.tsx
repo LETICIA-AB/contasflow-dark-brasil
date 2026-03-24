@@ -50,9 +50,9 @@ export default function NotificationPanel({ onNavigateToClient }: Props) {
   };
 
   const iconFor = (type: string) => {
-    if (type === "submission") return "✅";
-    if (type === "upload") return "📄";
-    return "🏷️";
+    if (type === "submission") return "✓";
+    if (type === "upload") return "↑";
+    return "•";
   };
 
   return (

@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { type Client, type Upload, loadClients, saveClients, loadUploads, saveUploads } from "@/data/store";
 import { addNotification } from "@/data/notificationStore";
+import { CheckCircle2, AlertTriangle, Lock, FolderUp, Clock } from "lucide-react";
 
 interface Props {
   client: Client;
@@ -72,7 +73,6 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
       saveUploads(updated);
       setUploads(updated.filter((u) => u.clientId === client.id));
       setProcessing(false);
-      // Auto-redirect to confirm view after upload
       if (onNavigate) {
         setTimeout(() => onNavigate("confirm"), 1000);
       }
@@ -97,9 +97,9 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
   };
 
   const statusBadge = (s: string) => {
-    if (s === "processado") return <span className="cf-badge-green">✓ Processado</span>;
-    if (s === "aguardando") return <span className="cf-badge-yellow">⏳ Aguardando</span>;
-    return <span className="cf-badge-red">✗ Erro</span>;
+    if (s === "processado") return <span className="cf-badge-green inline-flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Processado</span>;
+    if (s === "aguardando") return <span className="cf-badge-yellow inline-flex items-center gap-1"><Clock className="w-3 h-3" /> Aguardando</span>;
+    return <span className="cf-badge-red">Erro</span>;
   };
 
   return (
@@ -128,7 +128,7 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
                         : "bg-secondary/40 text-muted-foreground border border-border"
                   } ${isCurrent ? "ring-2 ring-primary ring-offset-2 ring-offset-card" : ""}`}
                 >
-                  {hasUpload ? "✓" : isRequired ? "!" : "—"}
+                  {hasUpload ? <CheckCircle2 className="w-4 h-4" /> : isRequired ? "!" : "—"}
                 </div>
                 <span className={`text-[10px] font-medium ${isCurrent ? "text-primary" : "text-muted-foreground"}`}>{m.key}</span>
               </div>
@@ -137,7 +137,7 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
         </div>
         {missingMonths.length > 0 && (
           <div className="mt-3 px-3 py-2 rounded-lg bg-cf-yellow/10 border border-cf-yellow/30 flex items-start gap-2">
-            <span className="text-cf-yellow text-sm">⚠</span>
+            <AlertTriangle className="w-4 h-4 text-cf-yellow shrink-0 mt-0.5" />
             <p className="text-cf-yellow text-xs font-medium">Extratos pendentes: {missingMonths.map((m) => m.period).join(", ")}</p>
           </div>
         )}
@@ -168,14 +168,18 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
                 <span className="text-sm text-muted-foreground">Processando...</span>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">📁 Arraste ou clique · OFX, CSV, TXT, PDF</p>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <FolderUp className="w-5 h-5" />
+                Arraste ou clique · OFX, CSV, TXT, PDF
+              </div>
             )}
           </div>
         </div>
 
         {missingBanks.length > 0 && (
-          <div className="px-3 py-2 rounded-lg bg-cf-yellow/10 border border-cf-yellow/30 text-xs">
-            <p className="text-cf-yellow font-medium">⚠ Extratos pendentes ({period}): {missingBanks.join(", ")}</p>
+          <div className="px-3 py-2 rounded-lg bg-cf-yellow/10 border border-cf-yellow/30 text-xs flex items-center gap-2">
+            <AlertTriangle className="w-3.5 h-3.5 text-cf-yellow shrink-0" />
+            <p className="text-cf-yellow font-medium">Extratos pendentes ({period}): {missingBanks.join(", ")}</p>
           </div>
         )}
       </div>
@@ -191,28 +195,33 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
           <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
         </div>
 
-        {/* Submission block/warning */}
         {submitted ? (
-          <div className="px-4 py-3 rounded-lg bg-cf-green/10 border border-cf-green/30">
-            <p className="text-cf-green text-sm font-medium">✓ Envio concluído! Aguardando revisão do contador.</p>
+          <div className="px-4 py-3 rounded-lg bg-cf-green/10 border border-cf-green/30 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-cf-green" />
+            <p className="text-cf-green text-sm font-medium">Envio concluído! Aguardando revisão do contador.</p>
           </div>
         ) : !canSubmit ? (
           <div className="space-y-3">
             <div className="px-4 py-3 rounded-lg bg-cf-yellow/10 border border-cf-yellow/30">
-              <p className="text-cf-yellow text-sm font-medium">
-                ⚠ Você tem {pending.length} transação(ões) pendente(s) de classificação.
-              </p>
-              <p className="text-cf-yellow/80 text-xs mt-1">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-cf-yellow shrink-0" />
+                <p className="text-cf-yellow text-sm font-medium">
+                  Você tem {pending.length} transação(ões) pendente(s) de classificação.
+                </p>
+              </div>
+              <p className="text-cf-yellow/80 text-xs mt-1 ml-6">
                 Classifique todas as transações na aba <strong>"Conferir"</strong> para concluir o envio deste período. Seu progresso é salvo automaticamente.
               </p>
             </div>
-            <button className="cf-btn-secondary opacity-50 cursor-not-allowed" disabled>
-              🔒 Concluir envio do período
+            <button className="cf-btn-secondary opacity-50 cursor-not-allowed flex items-center gap-2" disabled>
+              <Lock className="w-4 h-4" />
+              Concluir envio do período
             </button>
           </div>
         ) : (
-          <button className="cf-btn-primary" onClick={handleSubmit}>
-            ✓ Concluir envio do período
+          <button className="cf-btn-primary flex items-center gap-2" onClick={handleSubmit}>
+            <CheckCircle2 className="w-4 h-4" />
+            Concluir envio do período
           </button>
         )}
       </div>

@@ -1,4 +1,5 @@
 import { type Client, formatCurrency } from "@/data/store";
+import { TrendingUp, TrendingDown, ArrowRight, AlertTriangle, Trophy, BarChart3, Lightbulb, Calendar } from "lucide-react";
 
 interface Props {
   client: Client;
@@ -12,7 +13,6 @@ export default function InsightsView({ client }: Props) {
   const debits = txs.filter((t) => t.type === "debit");
   const categories = [...new Set(debits.map((t) => t.category || "Não classificado"))];
 
-  // Monthly totals per category
   const catMonthly: Record<string, number[]> = {};
   categories.forEach((cat) => {
     catMonthly[cat] = monthKeys.map((mk) =>
@@ -21,7 +21,6 @@ export default function InsightsView({ client }: Props) {
     );
   });
 
-  // Projections: simple linear extrapolation from last 3 months
   const projections = categories.map((cat) => {
     const vals = catMonthly[cat];
     const last3 = vals.slice(-3);
@@ -32,27 +31,30 @@ export default function InsightsView({ client }: Props) {
     return { cat, avg, growth, projected: [avg * 1.0, avg * (1 + growth / 300), avg * (1 + growth / 150)] };
   }).filter((p) => p.avg > 0).sort((a, b) => b.avg - a.avg);
 
-  // Top categories
   const totalExpenses = debits.reduce((s, t) => s + t.amount, 0);
   const topCats = categories.map((cat) => ({
     cat,
     total: debits.filter((t) => (t.category || "Não classificado") === cat).reduce((s, t) => s + t.amount, 0),
   })).sort((a, b) => b.total - a.total);
 
-  // Trend alerts (>20% growth)
   const alerts = projections.filter((p) => p.growth > 20);
 
-  // Textual insights
-  const insights: string[] = [];
+  const insights: { icon: "up" | "down" | "stable"; text: string }[] = [];
   projections.forEach((p) => {
     if (p.growth > 20) {
-      insights.push(`📈 ${p.cat} cresceu ${p.growth.toFixed(0)}% nos últimos 3 meses — atenção!`);
+      insights.push({ icon: "up", text: `${p.cat} cresceu ${p.growth.toFixed(0)}% nos últimos 3 meses — atenção!` });
     } else if (p.growth < -15) {
-      insights.push(`📉 ${p.cat} reduziu ${Math.abs(p.growth).toFixed(0)}% — boa tendência.`);
+      insights.push({ icon: "down", text: `${p.cat} reduziu ${Math.abs(p.growth).toFixed(0)}% — boa tendência.` });
     } else if (Math.abs(p.growth) <= 5 && p.avg > 0) {
-      insights.push(`➡️ ${p.cat} está estável em ~${formatCurrency(p.avg)}/mês.`);
+      insights.push({ icon: "stable", text: `${p.cat} está estável em ~${formatCurrency(p.avg)}/mês.` });
     }
   });
+
+  const insightIcon = (type: "up" | "down" | "stable") => {
+    if (type === "up") return <TrendingUp className="w-4 h-4 text-cf-red shrink-0" />;
+    if (type === "down") return <TrendingDown className="w-4 h-4 text-cf-green shrink-0" />;
+    return <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />;
+  };
 
   return (
     <div className="space-y-6 cf-stagger">
@@ -61,10 +63,12 @@ export default function InsightsView({ client }: Props) {
         <p className="text-muted-foreground text-sm mt-1">Projeções e tendências baseadas nos seus dados — {client.name}</p>
       </div>
 
-      {/* Alerts */}
       {alerts.length > 0 && (
         <div className="cf-card border-cf-red/30 bg-cf-red/5">
-          <h3 className="font-semibold text-cf-red mb-3">🚨 Alertas de Tendência</h3>
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="w-4 h-4 text-cf-red" />
+            <h3 className="font-semibold text-cf-red">Alertas de Tendência</h3>
+          </div>
           <div className="space-y-2">
             {alerts.map((a) => (
               <div key={a.cat} className="flex items-center justify-between text-sm">
@@ -78,7 +82,10 @@ export default function InsightsView({ client }: Props) {
 
       {/* Top Categories */}
       <div className="cf-card">
-        <h3 className="font-semibold mb-4">🏆 Top Categorias de Despesa</h3>
+        <div className="flex items-center gap-2 mb-4">
+          <Trophy className="w-4 h-4 text-primary" />
+          <h3 className="font-semibold">Top Categorias de Despesa</h3>
+        </div>
         <div className="space-y-3">
           {topCats.slice(0, 6).map((tc, i) => {
             const pct = totalExpenses > 0 ? (tc.total / totalExpenses) * 100 : 0;
@@ -102,9 +109,12 @@ export default function InsightsView({ client }: Props) {
 
       {/* Projections */}
       <div className="cf-card p-0 overflow-hidden">
-        <div className="px-5 py-4 border-b border-border">
-          <h3 className="font-semibold">📊 Projeção — Próximos 3 Meses</h3>
-          <p className="text-xs text-muted-foreground mt-1">Baseado na média e tendência dos últimos 3 meses</p>
+        <div className="px-5 py-4 border-b border-border flex items-center gap-2">
+          <BarChart3 className="w-4 h-4 text-primary" />
+          <div>
+            <h3 className="font-semibold">Projeção — Próximos 3 Meses</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Baseado na média e tendência dos últimos 3 meses</p>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="cf-table">
@@ -138,11 +148,17 @@ export default function InsightsView({ client }: Props) {
 
       {/* Textual Insights */}
       <div className="cf-card">
-        <h3 className="font-semibold mb-4">💡 Resumo Inteligente</h3>
+        <div className="flex items-center gap-2 mb-4">
+          <Lightbulb className="w-4 h-4 text-primary" />
+          <h3 className="font-semibold">Resumo Inteligente</h3>
+        </div>
         {insights.length > 0 ? (
           <div className="space-y-2">
-            {insights.map((text, i) => (
-              <p key={i} className="text-sm text-foreground/80">{text}</p>
+            {insights.map((item, i) => (
+              <div key={i} className="flex items-center gap-2 text-sm text-foreground/80">
+                {insightIcon(item.icon)}
+                <span>{item.text}</span>
+              </div>
             ))}
           </div>
         ) : (
@@ -152,7 +168,10 @@ export default function InsightsView({ client }: Props) {
 
       {/* Seasonality mini chart */}
       <div className="cf-card">
-        <h3 className="font-semibold mb-4">📅 Despesas Totais por Mês</h3>
+        <div className="flex items-center gap-2 mb-4">
+          <Calendar className="w-4 h-4 text-primary" />
+          <h3 className="font-semibold">Despesas Totais por Mês</h3>
+        </div>
         <svg viewBox={`0 0 ${monthKeys.length * 70} 100`} className="w-full max-w-lg h-24">
           {(() => {
             const totals = monthKeys.map((mk) => debits.filter((t) => t.date.startsWith(mk)).reduce((s, t) => s + t.amount, 0));
