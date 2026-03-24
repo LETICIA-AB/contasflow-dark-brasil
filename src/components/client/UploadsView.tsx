@@ -1,6 +1,9 @@
 import { useState, useRef } from "react";
-import { type Client, type Upload, loadClients, saveClients, loadUploads, saveUploads, generateGenericTransactions } from "@/data/store";
+import { type Client, type Transaction, type Upload, loadClients, saveClients, loadUploads, saveUploads, generateGenericTransactions } from "@/data/store";
 import { addNotification } from "@/data/notificationStore";
+import { classifyTransaction } from "@/data/classificationRules";
+import { resolveAccounts } from "@/data/chartOfAccounts";
+import { parseOFX, parseCSV } from "@/data/fileParser";
 import { CheckCircle2, AlertTriangle, Lock, FolderUp, Clock } from "lucide-react";
 
 interface Props {
