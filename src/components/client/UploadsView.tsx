@@ -357,48 +357,84 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
                           <td colSpan={6} className="p-0 bg-muted/30">
                             {periodTxs.length === 0 ? (
                               <p className="text-sm text-muted-foreground p-4">Nenhuma transação encontrada para este período.</p>
-                            ) : (
-                              <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                  <thead>
-                                    <tr className="border-b border-border/50">
-                                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Data</th>
-                                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Descrição</th>
-                                      <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Valor</th>
-                                      <th className="px-4 py-2 text-center text-xs font-medium text-muted-foreground">Tipo</th>
-                                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Classificação</th>
-                                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Conta Débito</th>
-                                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Conta Crédito</th>
-                                      <th className="px-4 py-2 text-center text-xs font-medium text-muted-foreground">Status</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {periodTxs.map((t) => (
-                                      <tr key={t.id} className="border-b border-border/30 last:border-0">
-                                        <td className="px-4 py-2 whitespace-nowrap">{t.date}</td>
-                                        <td className="px-4 py-2 max-w-[200px] truncate" title={t.description}>{t.description}</td>
-                                        <td className={`px-4 py-2 text-right whitespace-nowrap font-medium ${t.type === "credit" ? "text-cf-green" : "text-cf-red"}`}>
-                                          {t.type === "credit" ? "+" : "-"} R$ {Math.abs(t.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                                        </td>
-                                        <td className="px-4 py-2 text-center">
-                                          <span className={`text-xs font-bold ${t.type === "credit" ? "text-cf-green" : "text-cf-red"}`}>
-                                            {t.type === "credit" ? "C" : "D"}
-                                          </span>
-                                        </td>
-                                        <td className="px-4 py-2 text-xs">{t.category || "—"}</td>
-                                        <td className="px-4 py-2 text-xs text-muted-foreground">{t.debitAccount || "—"}</td>
-                                        <td className="px-4 py-2 text-xs text-muted-foreground">{t.creditAccount || "—"}</td>
-                                        <td className="px-4 py-2 text-center">
-                                          {t.classifiedBy === "auto" && <span className="cf-badge-green text-[10px]">Auto</span>}
-                                          {t.classifiedBy === "pending" && <span className="cf-badge-yellow text-[10px]">Pendente</span>}
-                                          {t.classifiedBy === "client" && <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold bg-primary/10 text-primary border-primary/30">Cliente</span>}
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            )}
+                            ) : (() => {
+                              const filtered = periodTxs.filter((t) => {
+                                if (filterStatus !== "all" && t.classifiedBy !== filterStatus) return false;
+                                if (filterType !== "all" && t.type !== filterType) return false;
+                                return true;
+                              });
+                              return (
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-border/40">
+                                    <span className="text-xs font-medium text-muted-foreground">Filtros:</span>
+                                    <select
+                                      className="cf-select text-xs py-1 px-2 w-auto"
+                                      value={filterStatus}
+                                      onChange={(e) => setFilterStatus(e.target.value)}
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <option value="all">Todos os status</option>
+                                      <option value="auto">Auto</option>
+                                      <option value="pending">Pendente</option>
+                                      <option value="client">Cliente</option>
+                                    </select>
+                                    <select
+                                      className="cf-select text-xs py-1 px-2 w-auto"
+                                      value={filterType}
+                                      onChange={(e) => setFilterType(e.target.value)}
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <option value="all">Todos os tipos</option>
+                                      <option value="credit">Crédito (C)</option>
+                                      <option value="debit">Débito (D)</option>
+                                    </select>
+                                    <span className="text-xs text-muted-foreground ml-auto">{filtered.length} de {periodTxs.length} transações</span>
+                                  </div>
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                      <thead>
+                                        <tr className="border-b border-border/50">
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Data</th>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Descrição</th>
+                                          <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Valor</th>
+                                          <th className="px-4 py-2 text-center text-xs font-medium text-muted-foreground">Tipo</th>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Classificação</th>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Conta Débito</th>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Conta Crédito</th>
+                                          <th className="px-4 py-2 text-center text-xs font-medium text-muted-foreground">Status</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {filtered.length === 0 ? (
+                                          <tr><td colSpan={8} className="px-4 py-3 text-center text-sm text-muted-foreground">Nenhuma transação com esses filtros.</td></tr>
+                                        ) : filtered.map((t) => (
+                                          <tr key={t.id} className="border-b border-border/30 last:border-0">
+                                            <td className="px-4 py-2 whitespace-nowrap">{t.date}</td>
+                                            <td className="px-4 py-2 max-w-[200px] truncate" title={t.description}>{t.description}</td>
+                                            <td className={`px-4 py-2 text-right whitespace-nowrap font-medium ${t.type === "credit" ? "text-cf-green" : "text-cf-red"}`}>
+                                              {t.type === "credit" ? "+" : "-"} R$ {Math.abs(t.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="px-4 py-2 text-center">
+                                              <span className={`text-xs font-bold ${t.type === "credit" ? "text-cf-green" : "text-cf-red"}`}>
+                                                {t.type === "credit" ? "C" : "D"}
+                                              </span>
+                                            </td>
+                                            <td className="px-4 py-2 text-xs">{t.category || "—"}</td>
+                                            <td className="px-4 py-2 text-xs text-muted-foreground">{t.debitAccount || "—"}</td>
+                                            <td className="px-4 py-2 text-xs text-muted-foreground">{t.creditAccount || "—"}</td>
+                                            <td className="px-4 py-2 text-center">
+                                              {t.classifiedBy === "auto" && <span className="cf-badge-green text-[10px]">Auto</span>}
+                                              {t.classifiedBy === "pending" && <span className="cf-badge-yellow text-[10px]">Pendente</span>}
+                                              {t.classifiedBy === "client" && <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold bg-primary/10 text-primary border-primary/30">Cliente</span>}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </td>
                         </tr>
                       )}
