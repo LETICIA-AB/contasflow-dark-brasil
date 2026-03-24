@@ -135,18 +135,8 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
           });
           c.transactions = [...c.transactions, ...newTxs];
         } else {
-          // Fallback: generate generic transactions if parser found nothing
-          const monthMap: Record<string, string> = {
-            "Jan": "01", "Fev": "02", "Mar": "03", "Abr": "04", "Mai": "05", "Jun": "06",
-            "Jul": "07", "Ago": "08", "Set": "09", "Out": "10", "Nov": "11", "Dez": "12",
-          };
-          const [monthKey, year] = period.split("/");
-          const prefix = `${year}-${monthMap[monthKey]}`;
-          const existing = c.transactions.filter((t) => t.date.startsWith(prefix));
-          if (existing.length === 0) {
-            const newTxs = generateGenericTransactions(client.id, client.bank, period);
-            c.transactions = [...c.transactions, ...newTxs];
-          }
+          // No transactions found — show error, don't generate fake data
+          setParseError("Nenhuma transação encontrada nos arquivos enviados. Verifique se o formato é OFX ou CSV bancário válido.");
         }
         saveClients(allClients);
         onUpdate();
