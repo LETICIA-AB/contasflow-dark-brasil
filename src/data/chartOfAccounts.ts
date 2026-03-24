@@ -159,10 +159,23 @@ export const CATEGORY_DEBIT_MAP: Record<string, string> = {
   "Outros": "390001",
 };
 
-// Category → credit account code (revenues)
+// Category → credit account code
+// Primary revenue categories map to their specific revenue accounts.
+// Expense categories use "Outras Receitas Operacionais" (411005) as fallback
+// for atypical credit entries (e.g. reimbursements, refunds) — except bank
+// categories which map to "Juros Recebidos" (411001).
 export const CATEGORY_CREDIT_MAP: Record<string, string> = {
   "Receita de Vendas": "410001",
   "Receita de Serviços": "410002",
+  "Folha de Pagamento": "411005",        // reembolso folha / devolução
+  "Impostos e Tributos": "411005",       // restituição de tributos
+  "Fornecedores / Compras": "411005",    // devolução de fornecedor
+  "Aluguel": "411005",                   // crédito atípico de aluguel
+  "Serviços Contratados": "411005",      // devolução de serviço
+  "Despesas Bancárias": "411001",        // juros / rendimentos recebidos
+  "Empréstimos e Financiamentos": "411005", // devolução de parcela
+  "Retiradas dos Sócios": "411005",      // devolução de sócio
+  "Outros": "411005",                    // outras receitas diversas
 };
 
 export function resolveAccounts(

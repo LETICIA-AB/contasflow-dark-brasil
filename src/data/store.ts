@@ -94,9 +94,9 @@ export { CATEGORY_DEBIT_MAP as DEBIT_ACCOUNTS, CATEGORY_CREDIT_MAP as CREDIT_ACC
 
 // === Storage keys ===
 const KEYS = {
-  clients: "cf-v3-clients",
-  users: "cf-v3-users",
-  uploads: "cf-v3-uploads",
+  clients: "cf-v4-clients",   // v4: mock transactions removed, start clean
+  users: "cf-v3-users",       // keep user credentials across resets
+  uploads: "cf-v4-uploads",   // v4: fresh upload history
 };
 
 // === Seed data ===
@@ -260,7 +260,7 @@ function seedClients(): Client[] {
       banks: ["Caixa Econômica Federal", "Banco do Brasil", "Sicoob"],
       chartOverrides: {},
       status: "classify",
-      transactions: generateTransactions("c1"),
+      transactions: [],   // real data comes from uploaded bank statements
     },
     {
       id: "c2",
@@ -270,8 +270,8 @@ function seedClients(): Client[] {
       bank: "Bradesco",
       banks: ["Bradesco"],
       chartOverrides: {},
-      status: "review",
-      transactions: generateTransactions("c2"),
+      status: "classify",
+      transactions: [],
     },
     {
       id: "c3",
@@ -281,8 +281,8 @@ function seedClients(): Client[] {
       bank: "Itaú Unibanco",
       banks: ["Itaú Unibanco", "Banco do Brasil"],
       chartOverrides: {},
-      status: "approved",
-      transactions: generateTransactions("c3"),
+      status: "classify",
+      transactions: [],
     },
   ];
 }
@@ -296,11 +296,7 @@ function seedUsers(): User[] {
 }
 
 function seedUploads(): Upload[] {
-  return [
-    { id: "up1", clientId: "c1", filename: "extrato_caixa_mar2026.ofx", bank: "Caixa", size: "245 KB", date: "2026-03-15 09:30", period: "Mar/2026", status: "processado" },
-    { id: "up2", clientId: "c2", filename: "extrato_bradesco_mar2026.csv", bank: "Bradesco", size: "128 KB", date: "2026-03-14 14:15", period: "Mar/2026", status: "processado" },
-    { id: "up3", clientId: "c3", filename: "extrato_itau_mar2026.ofx", bank: "Itaú", size: "312 KB", date: "2026-03-13 11:00", period: "Mar/2026", status: "processado" },
-  ];
+  return [];  // no mock uploads — history built from real file uploads
 }
 
 // === Store helpers ===

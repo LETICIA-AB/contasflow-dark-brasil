@@ -165,6 +165,24 @@ export function runValidation(client: Client): Transaction[] {
       });
     }
 
+    // Missing accounting accounts
+    if (tx.classifiedBy !== "pending" && tx.category && (!tx.debitAccount || !tx.creditAccount)) {
+      flags.push({
+        type: "low_confidence",
+        severity: "warning",
+        message: "Contas contábeis não resolvidas — lançamento incompleto",
+      });
+    }
+
+    // Debit account equals credit account (invalid double-entry)
+    if (tx.debitAccount && tx.creditAccount && tx.debitAccount === tx.creditAccount) {
+      flags.push({
+        type: "category_mismatch",
+        severity: "error",
+        message: `Conta débito igual à conta crédito (${tx.debitAccount}) — lançamento inválido`,
+      });
+    }
+
     const confidenceScore = calculateConfidence(tx, flags);
 
     return {
