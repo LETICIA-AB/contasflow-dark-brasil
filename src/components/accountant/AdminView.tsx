@@ -142,7 +142,7 @@ export default function AdminView({ clients, onUpdate }: Props) {
   ] as const;
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 cf-stagger">
       <h2 className="text-2xl font-bold">Administração</h2>
 
       <div className="flex gap-1 bg-card rounded-lg border border-border p-1 w-fit">

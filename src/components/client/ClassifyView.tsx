@@ -42,7 +42,7 @@ export default function ClassifyView({ client, onUpdate }: Props) {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 cf-stagger">
       <div>
         <h2 className="text-2xl font-bold">Classificar Transações</h2>
         <p className="text-muted-foreground text-sm mt-1">Identifique as transações pendentes</p>
