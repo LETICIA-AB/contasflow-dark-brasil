@@ -64,6 +64,7 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setProcessing(true);
+    setParseError(null);
 
     const fileArray = Array.from(files);
     const readers: Promise<{ file: File; content: string }>[] = fileArray.map(
