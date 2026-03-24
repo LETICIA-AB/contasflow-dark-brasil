@@ -3,7 +3,7 @@ import { type Client, type Transaction, type Upload, loadClients, saveClients, l
 import { addNotification } from "@/data/notificationStore";
 import { classifyTransaction } from "@/data/classificationRules";
 import { resolveAccounts } from "@/data/chartOfAccounts";
-import { parseOFX, parseCSV } from "@/data/fileParser";
+import { parseOFX, parseCSV, parsePDF } from "@/data/fileParser";
 import { CheckCircle2, AlertTriangle, Lock, FolderUp, Clock, ChevronDown, ChevronRight } from "lucide-react";
 
 interface Props {
@@ -29,6 +29,11 @@ const MONTHS = [
 
 const CURRENT_MONTH_PERIOD = "Mar/2026";
 
+const MONTH_MAP: Record<string, string> = {
+  Jan: "01", Fev: "02", Mar: "03", Abr: "04", Mai: "05", Jun: "06",
+  Jul: "07", Ago: "08", Set: "09", Out: "10", Nov: "11", Dez: "12",
+};
+
 export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
   const [uploads, setUploads] = useState<Upload[]>(() => loadUploads().filter((u) => u.clientId === client.id));
   const [period, setPeriod] = useState("Mar/2026");
@@ -37,8 +42,6 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
   const [processing, setProcessing] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [expandedUploadId, setExpandedUploadId] = useState<string | null>(null);
-  const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [filterType, setFilterType] = useState<string>("all");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const periods = ["Out/2025", "Nov/2025", "Dez/2025", "Jan/2026", "Fev/2026", "Mar/2026"];
@@ -67,16 +70,27 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
     setParseError(null);
 
     const fileArray = Array.from(files);
-    const readers: Promise<{ file: File; content: string }>[] = fileArray.map(
-      (f) => new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve({ file: f, content: reader.result as string });
-        reader.onerror = () => resolve({ file: f, content: "" });
-        reader.readAsText(f);
-      })
+
+    // PDFs must be read as ArrayBuffer for PDF.js; all others as text
+    const readers: Promise<{ file: File; content: string; buffer?: ArrayBuffer }>[] = fileArray.map(
+      (f) => {
+        const ext = f.name.toLowerCase().split(".").pop() || "";
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          if (ext === "pdf") {
+            reader.onload = () => resolve({ file: f, content: "", buffer: reader.result as ArrayBuffer });
+            reader.onerror = () => resolve({ file: f, content: "" });
+            reader.readAsArrayBuffer(f);
+          } else {
+            reader.onload = () => resolve({ file: f, content: reader.result as string });
+            reader.onerror = () => resolve({ file: f, content: "" });
+            reader.readAsText(f);
+          }
+        });
+      }
     );
 
-    Promise.all(readers).then((results) => {
+    Promise.all(readers).then(async (results) => {
       const allUploads = loadUploads();
       const newUploads: Upload[] = results.map(({ file }, i) => ({
         id: `up-${Date.now()}-${i}`,
@@ -92,37 +106,33 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
       saveUploads(updated);
       setUploads(updated.filter((u) => u.clientId === client.id));
 
-      // Parse real transactions from files
       let allParsed: import("@/data/fileParser").ParsedTransaction[] = [];
-      for (const { file, content } of results) {
-        if (!content) {
-          console.log(`[UploadsView] Arquivo "${file.name}" sem conteúdo`);
-          continue;
-        }
+      let pdfError = false;
+
+      for (const { file, content, buffer } of results) {
         const ext = file.name.toLowerCase().split(".").pop() || "";
-        console.log(`[UploadsView] Processando "${file.name}" (ext: ${ext}, tamanho: ${content.length} chars)`);
-        console.log(`[UploadsView] Primeiros 500 chars:`, content.substring(0, 500));
-        if (ext === "ofx") {
-          const parsed = parseOFX(content);
-          console.log(`[UploadsView] OFX parser encontrou ${parsed.length} transações`);
-          if (parsed.length > 0) console.log(`[UploadsView] Exemplo:`, parsed[0]);
-          allParsed = [...allParsed, ...parsed];
-        } else if (ext === "csv" || ext === "txt") {
-          const parsed = parseCSV(content);
-          console.log(`[UploadsView] CSV parser encontrou ${parsed.length} transações`);
-          if (parsed.length > 0) console.log(`[UploadsView] Exemplo:`, parsed[0]);
-          allParsed = [...allParsed, ...parsed];
+        if (ext === "pdf") {
+          if (!buffer) continue;
+          try {
+            const parsed = await parsePDF(buffer);
+            allParsed = [...allParsed, ...parsed];
+          } catch {
+            pdfError = true;
+          }
         } else {
-          console.log(`[UploadsView] Extensão "${ext}" não suportada para parsing`);
+          if (!content) continue;
+          if (ext === "ofx") {
+            allParsed = [...allParsed, ...parseOFX(content)];
+          } else if (ext === "csv" || ext === "txt") {
+            allParsed = [...allParsed, ...parseCSV(content)];
+          }
         }
       }
-      console.log(`[UploadsView] Total de transações parseadas: ${allParsed.length}`);
 
       const allClients = loadClients();
       const c = allClients.find((cl) => cl.id === client.id);
       if (c) {
         if (allParsed.length > 0) {
-          // Convert parsed transactions to Transaction[] with classification
           const newTxs: Transaction[] = allParsed.map((p, i) => {
             const result = classifyTransaction(p.description, p.type);
             const category = result.auto ? result.category : "";
@@ -148,17 +158,16 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
             };
           });
           c.transactions = [...c.transactions, ...newTxs];
+        } else if (pdfError) {
+          setParseError("Não foi possível ler o PDF (sem conexão com CDN). Alternativa: no app Stone vá em Extrato → ⋮ → Exportar → CSV.");
         } else {
-          // No transactions found — show error, don't generate fake data
-          setParseError("Nenhuma transação encontrada nos arquivos enviados. Verifique se o formato é OFX ou CSV bancário válido.");
+          setParseError("Nenhuma transação encontrada. Verifique se o formato é OFX ou CSV bancário válido.");
         }
         saveClients(allClients);
         onUpdate();
       }
 
       setProcessing(false);
-      // Stay on uploads so the user can see the updated progress and
-      // navigate to "Conferir" when ready — no forced redirect.
     });
   };
 
@@ -176,70 +185,41 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
       });
       onUpdate();
       setSubmitted(true);
-      // After submission, go to the dashboard to show financial summary
       if (onNavigate) setTimeout(() => onNavigate("dashboard"), 1800);
     }
   };
 
   const statusBadge = (s: string) => {
-    if (s === "processado") return <span className="cf-badge-green inline-flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Processado</span>;
-    if (s === "aguardando") return <span className="cf-badge-yellow inline-flex items-center gap-1"><Clock className="w-3 h-3" /> Aguardando</span>;
-    return <span className="cf-badge-red">Erro</span>;
+    if (s === "processado") return <span className="cf-badge-green inline-flex items-center gap-1 shrink-0"><CheckCircle2 className="w-3 h-3" /> Processado</span>;
+    if (s === "aguardando") return <span className="cf-badge-yellow inline-flex items-center gap-1 shrink-0"><Clock className="w-3 h-3" /> Aguardando</span>;
+    return <span className="cf-badge-red shrink-0">Erro</span>;
   };
 
   return (
-    <div className="space-y-6 cf-stagger">
+    <div className="space-y-5 cf-stagger">
+      {/* Header */}
       <div>
         <h2 className="text-2xl font-bold font-heading">Envios</h2>
         <p className="text-muted-foreground text-sm mt-1">Envie extratos bancários e acompanhe o progresso</p>
       </div>
 
-      {/* Annual Progress */}
-      <div className="cf-card">
-        <h3 className="text-sm font-semibold text-muted-foreground mb-4 uppercase tracking-wider">Progresso Anual</h3>
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-2">
-          {MONTHS.map((m) => {
-            const hasUpload = uploadedPeriods.has(m.period);
-            const isRequired = periods.includes(m.period);
-            const isCurrent = m.period === CURRENT_MONTH_PERIOD;
-            return (
-              <div key={m.key} className="flex flex-col items-center gap-1.5 min-w-[3rem]">
-                <div
-                  className={`w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${
-                    hasUpload
-                      ? "bg-cf-green/20 text-cf-green border border-cf-green/40"
-                      : isRequired
-                        ? "bg-cf-red/10 text-cf-red border border-cf-red/30"
-                        : "bg-secondary/40 text-muted-foreground border border-border"
-                  } ${isCurrent ? "ring-2 ring-primary ring-offset-2 ring-offset-card" : ""}`}
-                >
-                  {hasUpload ? <CheckCircle2 className="w-4 h-4" /> : isRequired ? "!" : "—"}
-                </div>
-                <span className={`text-[10px] font-medium ${isCurrent ? "text-primary" : "text-muted-foreground"}`}>{m.key}</span>
-              </div>
-            );
-          })}
-        </div>
-        {missingMonths.length > 0 && (
-          <div className="mt-3 px-3 py-2 rounded-lg bg-cf-yellow/10 border border-cf-yellow/30 flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-cf-yellow shrink-0 mt-0.5" />
-            <p className="text-cf-yellow text-xs font-medium">Extratos pendentes: {missingMonths.map((m) => m.period).join(", ")}</p>
-          </div>
-        )}
-      </div>
+      {/* Zona 1: Upload + Calendário */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-4">
 
-      {/* Upload */}
-      <div className="cf-card">
-        <div className="flex flex-wrap items-end gap-4 mb-4">
-          <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-2">Período</label>
-            <select className="cf-select w-40" value={period} onChange={(e) => setPeriod(e.target.value)}>
+        {/* Upload zone */}
+        <div className="cf-card space-y-3">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-muted-foreground">Período</span>
+            <select className="cf-select w-36" value={period} onChange={(e) => setPeriod(e.target.value)}>
               {periods.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
+
           <div
-            className={`flex-1 min-w-[250px] border-2 border-dashed rounded-lg transition-colors cursor-pointer flex items-center justify-center py-4 px-6 ${
-              dragging ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground"
+            className={`border-2 border-dashed rounded-xl transition-all cursor-pointer flex flex-col items-center justify-center py-10 gap-3 ${
+              dragging
+                ? "border-primary bg-primary/5"
+                : "border-border hover:border-primary/40 hover:bg-primary/[0.02]"
             }`}
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
@@ -248,230 +228,230 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
           >
             <input ref={fileRef} type="file" className="hidden" accept={accepted.join(",")} multiple onChange={(e) => handleFiles(e.target.files)} />
             {processing ? (
-              <div className="flex items-center gap-3">
-                <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                <span className="text-sm text-muted-foreground">Processando...</span>
-              </div>
+              <>
+                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm text-muted-foreground">Analisando extrato...</span>
+              </>
             ) : (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <FolderUp className="w-5 h-5" />
-                Arraste ou clique · OFX, CSV, TXT, PDF
+              <>
+                <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center">
+                  <FolderUp className="w-5 h-5 text-primary" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-medium">Arraste ou clique para enviar</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">OFX · CSV · TXT · PDF</p>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Parse error */}
+          {parseError && (
+            <div className="px-3 py-2.5 rounded-lg bg-cf-red/10 border border-cf-red/30 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-cf-red shrink-0 mt-0.5" />
+              <div>
+                <p className="text-cf-red text-xs font-medium">{parseError}</p>
+                <p className="text-cf-red/60 text-[11px] mt-0.5">Formatos: OFX (extrato bancário) e CSV com data, descrição e valor.</p>
               </div>
+            </div>
+          )}
+
+          {/* Inline success banner */}
+          {!parseError && !processing && total > 0 && pending.length > 0 && onNavigate && (
+            <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg bg-cf-green/10 border border-cf-green/25">
+              <div className="flex items-center gap-2 min-w-0">
+                <CheckCircle2 className="w-4 h-4 text-cf-green shrink-0" />
+                <p className="text-xs text-cf-green font-medium truncate">
+                  {total} importadas · {pending.length} aguardando classificação
+                </p>
+              </div>
+              <button
+                className="cf-btn-primary text-xs py-1.5 px-3 whitespace-nowrap shrink-0"
+                onClick={() => onNavigate("confirm")}
+              >
+                Conferir →
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Compact calendar */}
+        <div className="cf-card">
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Cobertura do ano</p>
+          <div className="grid grid-cols-4 gap-x-1 gap-y-3">
+            {MONTHS.map((m) => {
+              const hasUpload = uploadedPeriods.has(m.period);
+              const isRequired = periods.includes(m.period);
+              const isCurrent = m.period === CURRENT_MONTH_PERIOD;
+              return (
+                <div key={m.key} className="flex flex-col items-center gap-1">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[9px] font-bold transition-all ${
+                    hasUpload
+                      ? "bg-cf-green/20 text-cf-green border border-cf-green/40"
+                      : isCurrent
+                        ? "bg-primary/15 text-primary border border-primary/50 ring-1 ring-primary/40 ring-offset-1 ring-offset-card"
+                        : isRequired
+                          ? "bg-cf-red/10 text-cf-red border border-cf-red/30"
+                          : "bg-secondary/40 text-muted-foreground/40 border border-border/40"
+                  }`}>
+                    {hasUpload ? "✓" : m.key.slice(0, 3)}
+                  </div>
+                  <span className={`text-[9px] font-medium leading-none ${
+                    isCurrent ? "text-primary" : hasUpload ? "text-cf-green/70" : "text-muted-foreground/50"
+                  }`}>
+                    {m.key}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {(missingBanks.length > 0 || missingMonths.length > 0) && (
+            <div className="mt-3 pt-3 border-t border-border/50 space-y-1">
+              {missingBanks.length > 0 && (
+                <p className="text-[11px] text-cf-yellow/80 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3 shrink-0" />
+                  Banco pendente: {missingBanks.join(", ")}
+                </p>
+              )}
+              {missingMonths.length > 0 && (
+                <p className="text-[11px] text-muted-foreground">
+                  {missingMonths.length} mês(es) sem extrato
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Zona 2: Progress + action */}
+      <div className="cf-card">
+        <div className="flex items-center gap-4">
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium">
+                {total === 0 ? "Nenhuma transação importada" : `${classified} de ${total} transações classificadas`}
+              </span>
+              {total > 0 && (
+                <span className="text-sm font-bold text-primary tabular-nums">{progress}%</span>
+              )}
+            </div>
+            <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary rounded-full transition-all duration-500"
+                style={{ width: `${total === 0 ? 0 : progress}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="shrink-0">
+            {submitted ? (
+              <div className="flex items-center gap-1.5 text-cf-green text-sm font-medium">
+                <CheckCircle2 className="w-4 h-4" />
+                Enviado!
+              </div>
+            ) : canSubmit ? (
+              <button className="cf-btn-primary flex items-center gap-2 whitespace-nowrap" onClick={handleSubmit}>
+                <CheckCircle2 className="w-4 h-4" />
+                Concluir envio
+              </button>
+            ) : (
+              <button className="cf-btn-secondary opacity-50 cursor-not-allowed flex items-center gap-2 whitespace-nowrap" disabled>
+                <Lock className="w-4 h-4" />
+                Concluir envio
+              </button>
             )}
           </div>
         </div>
 
-        {missingBanks.length > 0 && (
-          <div className="px-3 py-2 rounded-lg bg-cf-yellow/10 border border-cf-yellow/30 text-xs flex items-center gap-2">
-            <AlertTriangle className="w-3.5 h-3.5 text-cf-yellow shrink-0" />
-            <p className="text-cf-yellow font-medium">Extratos pendentes ({period}): {missingBanks.join(", ")}</p>
-          </div>
+        {submitted && (
+          <p className="text-xs text-muted-foreground mt-2">Aguardando revisão do contador.</p>
+        )}
+        {!submitted && !canSubmit && total > 0 && (
+          <p className="text-xs text-muted-foreground mt-2">
+            <AlertTriangle className="w-3 h-3 inline text-cf-yellow mr-1" />
+            Classifique as {pending.length} transação(ões) pendente(s) em <strong>Conferir</strong> para concluir.
+          </p>
         )}
       </div>
 
-      {parseError && (
-        <div className="cf-card px-4 py-3 bg-cf-red/10 border border-cf-red/30 flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 text-cf-red shrink-0 mt-0.5" />
-          <div>
-            <p className="text-cf-red text-sm font-medium">{parseError}</p>
-            <p className="text-cf-red/70 text-xs mt-1">Formatos suportados: OFX (extrato bancário) e CSV com colunas de data, descrição e valor.</p>
-          </div>
-        </div>
-      )}
-
-      {!parseError && !processing && total > 0 && pending > 0 && onNavigate && (
-        <div className="cf-card border-primary/30 bg-primary/5 flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <p className="text-sm font-semibold text-primary">Extrato carregado com sucesso!</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{total} transações importadas · {pending} aguardando classificação</p>
-          </div>
-          <button className="cf-btn-primary text-sm flex items-center gap-2" onClick={() => onNavigate("confirm")}>
-            <CheckCircle2 className="w-4 h-4" /> Ir para Conferir
-          </button>
-        </div>
-      )}
-
-      {/* Classification progress + submit */}
-      <div className="cf-card space-y-4">
-        <h3 className="font-semibold">Progresso de Classificação</h3>
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium">{classified} de {total} classificadas</span>
-          <span className="text-sm font-bold text-primary">{progress}%</span>
-        </div>
-        <div className="w-full h-2.5 bg-secondary rounded-full overflow-hidden">
-          <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
-        </div>
-
-        {submitted ? (
-          <div className="px-4 py-3 rounded-lg bg-cf-green/10 border border-cf-green/30 flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-cf-green" />
-            <p className="text-cf-green text-sm font-medium">Envio concluído! Aguardando revisão do contador.</p>
-          </div>
-        ) : !canSubmit ? (
-          <div className="space-y-3">
-            <div className="px-4 py-3 rounded-lg bg-cf-yellow/10 border border-cf-yellow/30">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-cf-yellow shrink-0" />
-                <p className="text-cf-yellow text-sm font-medium">
-                  Você tem {pending.length} transação(ões) pendente(s) de classificação.
-                </p>
-              </div>
-              <p className="text-cf-yellow/80 text-xs mt-1 ml-6">
-                Classifique todas as transações na aba <strong>"Conferir"</strong> para concluir o envio deste período. Seu progresso é salvo automaticamente.
-              </p>
-            </div>
-            <button className="cf-btn-secondary opacity-50 cursor-not-allowed flex items-center gap-2" disabled>
-              <Lock className="w-4 h-4" />
-              Concluir envio do período
-            </button>
-          </div>
-        ) : (
-          <button className="cf-btn-primary flex items-center gap-2" onClick={handleSubmit}>
-            <CheckCircle2 className="w-4 h-4" />
-            Concluir envio do período
-          </button>
-        )}
-      </div>
-
-      {/* Upload History */}
+      {/* Zona 3: Histórico simplificado */}
       {uploads.length > 0 && (
         <div className="cf-card p-0 overflow-hidden">
           <div className="px-5 py-4 border-b border-border">
-            <h3 className="font-semibold">Histórico de envios</h3>
+            <h3 className="font-semibold text-sm">Histórico de envios</h3>
           </div>
-          <div className="overflow-x-auto">
-            <table className="cf-table">
-              <thead>
-                <tr>
-                  <th>Arquivo</th>
-                  <th>Banco</th>
-                  <th>Tamanho</th>
-                  <th>Data/Hora</th>
-                  <th>Período</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {uploads.map((u) => {
-                  const isExpanded = expandedUploadId === u.id;
-                  const periodTxs = isExpanded
-                    ? client.transactions.filter((t) => {
-                        const monthMap: Record<string, string> = {
-                          "Jan": "01", "Fev": "02", "Mar": "03", "Abr": "04", "Mai": "05", "Jun": "06",
-                          "Jul": "07", "Ago": "08", "Set": "09", "Out": "10", "Nov": "11", "Dez": "12",
-                        };
-                        const [mk, yr] = u.period.split("/");
-                        const prefix = `${yr}-${monthMap[mk]}`;
-                        return t.date.startsWith(prefix);
-                      })
-                    : [];
-                  return (
-                    <React.Fragment key={u.id}>
-                      <tr
-                        className="cursor-pointer hover:bg-muted/50 transition-colors"
-                        onClick={() => setExpandedUploadId(isExpanded ? null : u.id)}
-                      >
-                        <td className="font-medium flex items-center gap-2">
-                          {isExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
-                          {u.filename}
-                        </td>
-                        <td>{u.bank}</td>
-                        <td className="text-muted-foreground">{u.size}</td>
-                        <td className="text-muted-foreground">{u.date}</td>
-                        <td>{u.period}</td>
-                        <td>{statusBadge(u.status)}</td>
-                      </tr>
-                      {isExpanded && (
-                        <tr>
-                          <td colSpan={6} className="p-0 bg-muted/30">
-                            {periodTxs.length === 0 ? (
-                              <p className="text-sm text-muted-foreground p-4">Nenhuma transação encontrada para este período.</p>
-                            ) : (() => {
-                              const filtered = periodTxs.filter((t) => {
-                                if (filterStatus !== "all" && t.classifiedBy !== filterStatus) return false;
-                                if (filterType !== "all" && t.type !== filterType) return false;
-                                return true;
-                              });
-                              return (
-                                <div>
-                                  <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-border/40">
-                                    <span className="text-xs font-medium text-muted-foreground">Filtros:</span>
-                                    <select
-                                      className="cf-select text-xs py-1 px-2 w-auto"
-                                      value={filterStatus}
-                                      onChange={(e) => setFilterStatus(e.target.value)}
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <option value="all">Todos os status</option>
-                                      <option value="auto">Auto</option>
-                                      <option value="pending">Pendente</option>
-                                      <option value="client">Cliente</option>
-                                    </select>
-                                    <select
-                                      className="cf-select text-xs py-1 px-2 w-auto"
-                                      value={filterType}
-                                      onChange={(e) => setFilterType(e.target.value)}
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <option value="all">Todos os tipos</option>
-                                      <option value="credit">Crédito (C)</option>
-                                      <option value="debit">Débito (D)</option>
-                                    </select>
-                                    <span className="text-xs text-muted-foreground ml-auto">{filtered.length} de {periodTxs.length} transações</span>
-                                  </div>
-                                  <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                      <thead>
-                                        <tr className="border-b border-border/50">
-                                          <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Data</th>
-                                          <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Descrição</th>
-                                          <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Valor</th>
-                                          <th className="px-4 py-2 text-center text-xs font-medium text-muted-foreground">Tipo</th>
-                                          <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Classificação</th>
-                                          <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Conta Débito</th>
-                                          <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Conta Crédito</th>
-                                          <th className="px-4 py-2 text-center text-xs font-medium text-muted-foreground">Status</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {filtered.length === 0 ? (
-                                          <tr><td colSpan={8} className="px-4 py-3 text-center text-sm text-muted-foreground">Nenhuma transação com esses filtros.</td></tr>
-                                        ) : filtered.map((t) => (
-                                          <tr key={t.id} className="border-b border-border/30 last:border-0">
-                                            <td className="px-4 py-2 whitespace-nowrap">{t.date}</td>
-                                            <td className="px-4 py-2 max-w-[200px] truncate" title={t.description}>{t.description}</td>
-                                            <td className={`px-4 py-2 text-right whitespace-nowrap font-medium ${t.type === "credit" ? "text-cf-green" : "text-cf-red"}`}>
-                                              {t.type === "credit" ? "+" : "-"} R$ {Math.abs(t.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                                            </td>
-                                            <td className="px-4 py-2 text-center">
-                                              <span className={`text-xs font-bold ${t.type === "credit" ? "text-cf-green" : "text-cf-red"}`}>
-                                                {t.type === "credit" ? "C" : "D"}
-                                              </span>
-                                            </td>
-                                            <td className="px-4 py-2 text-xs">{t.category || "—"}</td>
-                                            <td className="px-4 py-2 text-xs text-muted-foreground">{t.debitAccount || "—"}</td>
-                                            <td className="px-4 py-2 text-xs text-muted-foreground">{t.creditAccount || "—"}</td>
-                                            <td className="px-4 py-2 text-center">
-                                              {t.classifiedBy === "auto" && <span className="cf-badge-green text-[10px]">Auto</span>}
-                                              {t.classifiedBy === "pending" && <span className="cf-badge-yellow text-[10px]">Pendente</span>}
-                                              {t.classifiedBy === "client" && <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold bg-primary/10 text-primary border-primary/30">Cliente</span>}
-                                            </td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                </div>
-                              );
-                            })()}
-                          </td>
-                        </tr>
+          <div className="divide-y divide-border/60">
+            {uploads.map((u) => {
+              const isExpanded = expandedUploadId === u.id;
+              const [mk, yr] = u.period.split("/");
+              const prefix = `${yr}-${MONTH_MAP[mk] ?? ""}`;
+              const periodTxs = client.transactions.filter((t) => prefix && t.date.startsWith(prefix));
+              const credits = periodTxs.filter((t) => t.type === "credit").reduce((s, t) => s + t.amount, 0);
+              const debits = periodTxs.filter((t) => t.type === "debit").reduce((s, t) => s + t.amount, 0);
+              const classifiedCount = periodTxs.filter((t) => t.classifiedBy !== "pending").length;
+              const pendingCount = periodTxs.length - classifiedCount;
+
+              return (
+                <div key={u.id}>
+                  <div
+                    className="flex items-center gap-3 px-5 py-3.5 cursor-pointer hover:bg-muted/30 transition-colors"
+                    onClick={() => setExpandedUploadId(isExpanded ? null : u.id)}
+                  >
+                    {isExpanded
+                      ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+                      : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{u.filename}</p>
+                      <p className="text-[11px] text-muted-foreground">{u.date}</p>
+                    </div>
+                    <span className="text-xs text-muted-foreground hidden sm:block">{u.period}</span>
+                    <span className="text-xs text-muted-foreground hidden sm:block">{u.bank}</span>
+                    {periodTxs.length > 0 && (
+                      <span className="text-xs text-muted-foreground">{periodTxs.length} tx</span>
+                    )}
+                    {statusBadge(u.status)}
+                  </div>
+
+                  {isExpanded && (
+                    <div className="px-5 pb-4 pt-2 bg-muted/20 border-t border-border/40">
+                      {periodTxs.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">Nenhuma transação para este período.</p>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-3 gap-3 mb-3">
+                            <div className="rounded-lg bg-cf-green/10 border border-cf-green/20 px-3 py-2">
+                              <p className="text-[10px] text-muted-foreground mb-0.5">Entradas</p>
+                              <p className="text-sm font-semibold text-cf-green">
+                                R$ {credits.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                              </p>
+                            </div>
+                            <div className="rounded-lg bg-cf-red/10 border border-cf-red/20 px-3 py-2">
+                              <p className="text-[10px] text-muted-foreground mb-0.5">Saídas</p>
+                              <p className="text-sm font-semibold text-cf-red">
+                                R$ {debits.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                              </p>
+                            </div>
+                            <div className="rounded-lg bg-secondary/60 border border-border px-3 py-2">
+                              <p className="text-[10px] text-muted-foreground mb-0.5">Classificadas</p>
+                              <p className="text-sm font-semibold">{classifiedCount}/{periodTxs.length}</p>
+                            </div>
+                          </div>
+                          {pendingCount > 0 && onNavigate && (
+                            <button
+                              className="cf-btn-secondary text-xs py-1.5"
+                              onClick={(e) => { e.stopPropagation(); onNavigate("confirm"); }}
+                            >
+                              Ver transações pendentes →
+                            </button>
+                          )}
+                        </>
                       )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
