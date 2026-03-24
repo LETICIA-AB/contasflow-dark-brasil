@@ -15,7 +15,7 @@ export default function AdminView({ clients, onUpdate }: Props) {
   const [formCnpj, setFormCnpj] = useState("");
   const [formPassword, setFormPassword] = useState("");
   const [formClientId, setFormClientId] = useState("");
-  const [formBanks, setFormBanks] = useState<string[]>([]);
+  
   const [banks, setBanks] = useState<BankEntry[]>(loadBanks);
   const [newBankName, setNewBankName] = useState("");
   const [newBankCode, setNewBankCode] = useState("");
