@@ -19,6 +19,8 @@ export interface Client {
   cnpj: string;
   regime: string;
   bank: string;
+  banks: string[];
+  chartOverrides: Record<string, { debit: string; credit: string }>;
   status: "classify" | "review" | "approved";
   transactions: Transaction[];
 }
