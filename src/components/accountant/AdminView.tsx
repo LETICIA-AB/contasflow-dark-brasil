@@ -141,6 +141,14 @@ export default function AdminView({ clients, onUpdate }: Props) {
 
   const handleSaveClient = () => {
     const allClients = loadClients();
+    const cnpjClean = clientFormCnpj.replace(/\D/g, "");
+    const duplicate = allClients.find(
+      (c) => c.cnpj.replace(/\D/g, "") === cnpjClean && c.id !== editingClient
+    );
+    if (duplicate) {
+      alert(`CNPJ já cadastrado para a empresa "${duplicate.name}".`);
+      return;
+    }
     if (editingClient === "new") {
       const newClient: Client = {
         id: `c-${Date.now()}`,
