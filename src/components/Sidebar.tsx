@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Session, Client } from "@/data/store";
 import { ThemeToggle } from "./ThemeToggle";
 import { Upload, CheckCircle, BarChart3, Lightbulb, Building2, LayoutDashboard, Bot, ClipboardList, Settings, LogOut, X } from "lucide-react";
+import logoSrc from "@/assets/contasflow-logo.png";
 
 interface SidebarProps {
   session: Session;
