@@ -109,7 +109,7 @@ export default function AdminView({ clients, onUpdate }: Props) {
   const handleClientSelect = (cid: string) => {
     setFormClientId(cid);
     const c = clients.find((cl) => cl.id === cid);
-    if (c) { setFormCnpj(c.cnpj); setFormBanks(c.banks || []); }
+    if (c) { setFormCnpj(c.cnpj); }
   };
 
   // === Client CRUD ===
