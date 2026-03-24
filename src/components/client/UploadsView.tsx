@@ -3,7 +3,7 @@ import { type Client, type Transaction, type Upload, loadClients, saveClients, l
 import { addNotification } from "@/data/notificationStore";
 import { classifyTransaction } from "@/data/classificationRules";
 import { resolveAccounts } from "@/data/chartOfAccounts";
-import { parseOFX, parseCSV } from "@/data/fileParser";
+import { parseOFX, parseCSV, parsePDF } from "@/data/fileParser";
 import { CheckCircle2, AlertTriangle, Lock, FolderUp, Clock, ChevronDown, ChevronRight } from "lucide-react";
 
 interface Props {
@@ -70,16 +70,27 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
     setParseError(null);
 
     const fileArray = Array.from(files);
-    const readers: Promise<{ file: File; content: string }>[] = fileArray.map(
-      (f) => new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve({ file: f, content: reader.result as string });
-        reader.onerror = () => resolve({ file: f, content: "" });
-        reader.readAsText(f);
-      })
+
+    // PDFs must be read as ArrayBuffer for PDF.js; all others as text
+    const readers: Promise<{ file: File; content: string; buffer?: ArrayBuffer }>[] = fileArray.map(
+      (f) => {
+        const ext = f.name.toLowerCase().split(".").pop() || "";
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          if (ext === "pdf") {
+            reader.onload = () => resolve({ file: f, content: "", buffer: reader.result as ArrayBuffer });
+            reader.onerror = () => resolve({ file: f, content: "" });
+            reader.readAsArrayBuffer(f);
+          } else {
+            reader.onload = () => resolve({ file: f, content: reader.result as string });
+            reader.onerror = () => resolve({ file: f, content: "" });
+            reader.readAsText(f);
+          }
+        });
+      }
     );
 
-    Promise.all(readers).then((results) => {
+    Promise.all(readers).then(async (results) => {
       const allUploads = loadUploads();
       const newUploads: Upload[] = results.map(({ file }, i) => ({
         id: `up-${Date.now()}-${i}`,
@@ -96,13 +107,25 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
       setUploads(updated.filter((u) => u.clientId === client.id));
 
       let allParsed: import("@/data/fileParser").ParsedTransaction[] = [];
-      for (const { file, content } of results) {
-        if (!content) continue;
+      let pdfError = false;
+
+      for (const { file, content, buffer } of results) {
         const ext = file.name.toLowerCase().split(".").pop() || "";
-        if (ext === "ofx") {
-          allParsed = [...allParsed, ...parseOFX(content)];
-        } else if (ext === "csv" || ext === "txt") {
-          allParsed = [...allParsed, ...parseCSV(content)];
+        if (ext === "pdf") {
+          if (!buffer) continue;
+          try {
+            const parsed = await parsePDF(buffer);
+            allParsed = [...allParsed, ...parsed];
+          } catch {
+            pdfError = true;
+          }
+        } else {
+          if (!content) continue;
+          if (ext === "ofx") {
+            allParsed = [...allParsed, ...parseOFX(content)];
+          } else if (ext === "csv" || ext === "txt") {
+            allParsed = [...allParsed, ...parseCSV(content)];
+          }
         }
       }
 
@@ -135,6 +158,8 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
             };
           });
           c.transactions = [...c.transactions, ...newTxs];
+        } else if (pdfError) {
+          setParseError("Não foi possível ler o PDF (sem conexão com CDN). Alternativa: no app Stone vá em Extrato → ⋮ → Exportar → CSV.");
         } else {
           setParseError("Nenhuma transação encontrada. Verifique se o formato é OFX ou CSV bancário válido.");
         }

@@ -1,4 +1,4 @@
-// === OFX and CSV file parsers ===
+// === OFX, CSV and PDF file parsers ===
 
 export interface ParsedTransaction {
   date: string;       // YYYY-MM-DD
@@ -163,4 +163,125 @@ function splitCSVLine(line: string, sep: string): string[] {
   }
   result.push(current);
   return result;
+}
+
+// === PDF parser ===
+
+/**
+ * Parse a PDF bank statement using PDF.js loaded from CDN at runtime.
+ * Extracts text content from all pages, groups items into visual lines,
+ * then applies Brazilian bank statement heuristics to find transactions.
+ *
+ * Throws if PDF.js cannot be loaded (no network) — caller should catch and
+ * show a user-facing error.
+ */
+export async function parsePDF(buffer: ArrayBuffer): Promise<ParsedTransaction[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pdfjsLib = (await import(
+    /* @vite-ignore */ "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs"
+  )) as any;
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  const allLines: string[] = [];
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+    const textContent = await page.getTextContent();
+
+    // Group text items into visual rows by Y coordinate proximity (±3 units)
+    const rows: Array<{ y: number; texts: { x: number; str: string }[] }> = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const item of textContent.items as any[]) {
+      if (!("str" in item) || !item.str.trim()) continue;
+      const x: number = item.transform[4];
+      const y: number = item.transform[5];
+      const existing = rows.find((r) => Math.abs(r.y - y) <= 3);
+      if (existing) {
+        existing.texts.push({ x, str: item.str });
+      } else {
+        rows.push({ y, texts: [{ x, str: item.str }] });
+      }
+    }
+
+    // Sort rows top-to-bottom (PDF Y=0 is bottom-left, so descending Y = top first)
+    rows.sort((a, b) => b.y - a.y);
+
+    for (const row of rows) {
+      // Sort text items left-to-right within each line
+      row.texts.sort((a, b) => a.x - b.x);
+      const lineText = row.texts.map((t) => t.str).join(" ").trim();
+      if (lineText) allLines.push(lineText);
+    }
+  }
+
+  return parsePDFLines(allLines);
+}
+
+/**
+ * Parse text lines extracted from a PDF to find Brazilian bank statement
+ * transactions. Handles Stone, Nubank, Itaú, Bradesco, Sicoob and others.
+ */
+function parsePDFLines(lines: string[]): ParsedTransaction[] {
+  const DATE_RE = /(\d{2}\/\d{2}\/\d{4})/;
+  const AMOUNT_RE = /([+-]?\s*R?\$?\s*\d{1,3}(?:\.\d{3})*,\d{2})/;
+
+  // Keywords to infer type when no explicit +/- sign is present
+  const CREDIT_KW = ["recebido", "recebida", "depósito", "deposito", "entrada", "crédito", "credito", "reembolso", "devolução", "devolucao", "rendimento", "cashback", "pix recebido", "ted recebida"];
+  const DEBIT_KW  = ["pagamento", "enviado", "enviada", "saque", "débito", "debito", "taxa", "tarifa", "mensalidade", "cobrança", "cobranca", "pix enviado", "ted enviada", "transferência enviada"];
+
+  const transactions: ParsedTransaction[] = [];
+
+  for (const line of lines) {
+    const dateMatch = DATE_RE.exec(line);
+    if (!dateMatch) continue;
+
+    const amountMatch = AMOUNT_RE.exec(line);
+    if (!amountMatch) continue;
+
+    // Parse date DD/MM/YYYY → YYYY-MM-DD
+    const parts = dateMatch[1].split("/");
+    const date = `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+
+    // Parse amount — strip whitespace inside the match first
+    const rawAmt = amountMatch[1].replace(/\s/g, "");
+    const hasPlus  = rawAmt.startsWith("+");
+    const hasMinus = rawAmt.startsWith("-");
+    const absAmt = parseFloat(
+      rawAmt.replace(/[+\-R$]/g, "").replace(/\./g, "").replace(",", ".")
+    );
+    if (isNaN(absAmt) || absAmt === 0) continue;
+
+    // Description: text between end-of-date and start-of-amount
+    const dateEnd  = dateMatch.index + dateMatch[0].length;
+    const amtStart = line.indexOf(amountMatch[0], dateEnd);
+    const rawDesc  = amtStart > dateEnd
+      ? line.substring(dateEnd, amtStart)
+      : line.substring(dateEnd);
+    const description = rawDesc.trim().replace(/\s+/g, " ") || "Sem descrição";
+
+    // Determine credit / debit
+    let type: "credit" | "debit";
+    if (hasPlus) {
+      type = "credit";
+    } else if (hasMinus) {
+      type = "debit";
+    } else {
+      const lower = description.toLowerCase();
+      if (CREDIT_KW.some((kw) => lower.includes(kw))) {
+        type = "credit";
+      } else if (DEBIT_KW.some((kw) => lower.includes(kw))) {
+        type = "debit";
+      } else {
+        type = "debit"; // safe default
+      }
+    }
+
+    transactions.push({ date, description, amount: absAmt, type });
+  }
+
+  return transactions;
 }
