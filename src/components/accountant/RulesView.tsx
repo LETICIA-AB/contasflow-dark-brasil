@@ -2,6 +2,7 @@ import { useState } from "react";
 import { CLASSIFICATION_RULES, classifyTransaction } from "@/data/classificationRules";
 import { loadMemory, deleteMemoryEntry, type ClassificationMemory } from "@/data/memoryStore";
 import { loadClients } from "@/data/store";
+import { Zap, Clock, Brain, FlaskConical, Trash2 } from "lucide-react";
 
 export default function RulesView() {
   const [testInput, setTestInput] = useState("");
@@ -40,8 +41,8 @@ export default function RulesView() {
         <button onClick={() => setSubTab("rules")} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${subTab === "rules" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
           Regras Regex ({CLASSIFICATION_RULES.length})
         </button>
-        <button onClick={() => { setSubTab("memory"); setMemory(loadMemory()); }} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${subTab === "memory" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-          🧠 Memória ({memory.length})
+        <button onClick={() => { setSubTab("memory"); setMemory(loadMemory()); }} className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-1.5 ${subTab === "memory" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+          <Brain className="w-3.5 h-3.5" /> Memória ({memory.length})
         </button>
       </div>
 
@@ -49,7 +50,10 @@ export default function RulesView() {
         <>
           {/* Tester */}
           <div className="cf-card border-primary/30">
-            <h3 className="font-semibold mb-4">🧪 Testador Interativo</h3>
+            <div className="flex items-center gap-2 mb-4">
+              <FlaskConical className="w-4 h-4 text-primary" />
+              <h3 className="font-semibold">Testador Interativo</h3>
+            </div>
             <div className="flex flex-wrap gap-3">
               <input className="cf-input flex-1 min-w-[250px]" placeholder="Digite a descrição do extrato..." value={testInput} onChange={(e) => setTestInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleTest()} />
               <select className="cf-select w-36" value={testType} onChange={(e) => setTestType(e.target.value as "debit" | "credit")}>
@@ -61,9 +65,9 @@ export default function RulesView() {
             {testResult && (
               <div className={`mt-4 p-3 rounded-lg ${testResult.auto ? "bg-primary/10 border border-primary/30" : "bg-cf-yellow/10 border border-cf-yellow/30"}`}>
                 {testResult.auto ? (
-                  <p className="text-sm"><span className="cf-badge-accent mr-2">⚡ {testResult.ruleId}</span> Classificada como <strong className="text-primary">{testResult.category}</strong></p>
+                  <p className="text-sm flex items-center gap-2"><span className="cf-badge-accent inline-flex items-center gap-1"><Zap className="w-3 h-3" /> {testResult.ruleId}</span> Classificada como <strong className="text-primary">{testResult.category}</strong></p>
                 ) : (
-                  <p className="text-sm text-cf-yellow">⏳ Nenhuma regra encontrada — transação ficaria pendente</p>
+                  <p className="text-sm text-cf-yellow flex items-center gap-2"><Clock className="w-4 h-4" /> Nenhuma regra encontrada — transação ficaria pendente</p>
                 )}
               </div>
             )}
@@ -110,7 +114,7 @@ export default function RulesView() {
         <div className="space-y-4">
           {memory.length === 0 ? (
             <div className="cf-card text-center py-12">
-              <p className="text-3xl mb-3">🧠</p>
+              <Brain className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
               <p className="text-muted-foreground">Nenhuma classificação na memória ainda.</p>
               <p className="text-xs text-muted-foreground mt-1">A memória será preenchida automaticamente conforme transações forem classificadas.</p>
             </div>
@@ -133,7 +137,9 @@ export default function RulesView() {
                           </span>
                         </td>
                         <td>
-                          <button className="cf-btn-ghost text-xs py-1 px-2 text-cf-red" onClick={() => handleDeleteMemory(m.normalizedDesc, m.clientId)}>Excluir</button>
+                          <button className="cf-btn-ghost text-xs py-1 px-2 text-cf-red inline-flex items-center gap-1" onClick={() => handleDeleteMemory(m.normalizedDesc, m.clientId)}>
+                            <Trash2 className="w-3 h-3" /> Excluir
+                          </button>
                         </td>
                       </tr>
                     ))}

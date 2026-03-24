@@ -3,6 +3,7 @@ import { type Client, CATEGORIES, loadClients, saveClients } from "@/data/store"
 import { CHART_OF_ACCOUNTS, CATEGORY_DEBIT_MAP, CATEGORY_CREDIT_MAP, type Account } from "@/data/chartOfAccounts";
 import { getActiveChart, saveCustomChart, clearCustomChart, saveClientChart, loadClientChart, removeClientChart, listAllClientCharts, findDuplicateChart, getActiveChartForClient } from "@/data/chartStore";
 import * as XLSX from "xlsx";
+import { ClipboardList, Download as DownloadIcon, Upload, RefreshCw, AlertCircle, Info, CheckCircle2, FileUp, Trash2 } from "lucide-react";
 
 interface Props {
   clients: Client[];
@@ -14,7 +15,6 @@ export default function AccountsView({ clients, onUpdate }: Props) {
   const [search, setSearch] = useState("");
   const [subView, setSubView] = useState<"browse" | "manage">("manage");
 
-  // Chart management state
   const fileRef = useRef<HTMLInputElement>(null);
   const [importPreview, setImportPreview] = useState<Account[] | null>(null);
   const [importError, setImportError] = useState("");
@@ -45,7 +45,6 @@ export default function AccountsView({ clients, onUpdate }: Props) {
 
   const clientName = (id: string) => clients.find((c) => c.id === id)?.name ?? "—";
 
-  // === Import logic ===
   const parseType = (val: string): "A" | "R" | "D" => {
     const v = (val || "").toString().trim().toUpperCase();
     if (v === "A" || v === "ATIVO" || v === "ASSET") return "A";
@@ -176,9 +175,12 @@ export default function AccountsView({ clients, onUpdate }: Props) {
         <>
           {/* Client chart summary */}
           <div className="cf-card p-0 overflow-hidden">
-            <div className="px-5 py-4 border-b border-border">
-              <h3 className="font-semibold">📋 Plano de Contas por Empresa</h3>
-              <p className="text-xs text-muted-foreground mt-1">Cada empresa pode ter seu próprio plano de contas importado</p>
+            <div className="px-5 py-4 border-b border-border flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-primary" />
+              <div>
+                <h3 className="font-semibold">Plano de Contas por Empresa</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Cada empresa pode ter seu próprio plano de contas importado</p>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="cf-table">
@@ -200,8 +202,8 @@ export default function AccountsView({ clients, onUpdate }: Props) {
                         <td className="font-mono text-sm">{hasCustom ? clientChart.accountCount : CHART_OF_ACCOUNTS.length}</td>
                         <td>
                           {hasCustom && (
-                            <button className="cf-btn-ghost text-xs py-1 px-2 text-cf-red" onClick={() => handleRemoveClientChart(c.id)}>
-                              Remover
+                            <button className="cf-btn-ghost text-xs py-1 px-2 text-cf-red inline-flex items-center gap-1" onClick={() => handleRemoveClientChart(c.id)}>
+                              <Trash2 className="w-3 h-3" /> Remover
                             </button>
                           )}
                         </td>
@@ -215,7 +217,10 @@ export default function AccountsView({ clients, onUpdate }: Props) {
 
           {/* Import section */}
           <div className="cf-card border-primary/30 space-y-4">
-            <h3 className="font-semibold">📥 Importar Plano de Contas</h3>
+            <div className="flex items-center gap-2">
+              <FileUp className="w-4 h-4 text-primary" />
+              <h3 className="font-semibold">Importar Plano de Contas</h3>
+            </div>
             <p className="text-xs text-muted-foreground">
               Selecione a empresa destino e importe um CSV/Excel com: <span className="font-mono text-primary">código, nome, tipo (A/R/D), grupo</span>
             </p>
@@ -227,8 +232,8 @@ export default function AccountsView({ clients, onUpdate }: Props) {
                   {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
-              <button className="cf-btn-primary" onClick={() => fileRef.current?.click()}>
-                📁 Selecionar arquivo
+              <button className="cf-btn-primary flex items-center gap-2" onClick={() => fileRef.current?.click()}>
+                <Upload className="w-4 h-4" /> Selecionar arquivo
               </button>
               <input
                 ref={fileRef}
@@ -242,7 +247,7 @@ export default function AccountsView({ clients, onUpdate }: Props) {
                 }}
               />
               <button
-                className="cf-btn-secondary text-xs"
+                className="cf-btn-secondary text-xs flex items-center gap-1"
                 onClick={() => {
                   const csv = "codigo,nome,tipo,grupo\n110001,Caixa Geral,A,Caixa e Bancos\n310001,Salários,D,Pessoal\n410001,Receita de Vendas,R,Receitas";
                   const blob = new Blob([csv], { type: "text/csv" });
@@ -252,22 +257,26 @@ export default function AccountsView({ clients, onUpdate }: Props) {
                   URL.revokeObjectURL(url);
                 }}
               >
-                ⬇ Baixar modelo CSV
+                <DownloadIcon className="w-3 h-3" /> Baixar modelo CSV
               </button>
             </div>
 
             {importError && (
-              <div className="px-3 py-2 rounded-lg bg-cf-red/10 border border-cf-red/30">
-                <p className="text-cf-red text-sm">❌ {importError}</p>
+              <div className="px-3 py-2 rounded-lg bg-cf-red/10 border border-cf-red/30 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-cf-red shrink-0" />
+                <p className="text-cf-red text-sm">{importError}</p>
               </div>
             )}
 
             {duplicateClients.length > 0 && importPreview && (
               <div className="px-4 py-3 rounded-lg bg-cf-blue/10 border border-cf-blue/30 space-y-2">
-                <p className="text-cf-blue text-sm font-medium">
-                  ℹ Este plano já está vinculado a: {duplicateClients.map((id) => clientName(id)).join(", ")}
-                </p>
-                <p className="text-cf-blue/80 text-xs">Você pode continuar importando para a empresa selecionada ou replicar para outra.</p>
+                <div className="flex items-center gap-2">
+                  <Info className="w-4 h-4 text-cf-blue shrink-0" />
+                  <p className="text-cf-blue text-sm font-medium">
+                    Este plano já está vinculado a: {duplicateClients.map((id) => clientName(id)).join(", ")}
+                  </p>
+                </div>
+                <p className="text-cf-blue/80 text-xs ml-6">Você pode continuar importando para a empresa selecionada ou replicar para outra.</p>
               </div>
             )}
 
@@ -275,7 +284,7 @@ export default function AccountsView({ clients, onUpdate }: Props) {
               <div className="space-y-3">
                 <div className="px-3 py-2 rounded-lg bg-cf-green/10 border border-cf-green/30">
                   <p className="text-cf-green text-sm font-medium">
-                    📋 {importPreview.length} contas — {importPreview.filter((a) => a.type === "A").length} Ativos, {importPreview.filter((a) => a.type === "R").length} Receitas, {importPreview.filter((a) => a.type === "D").length} Despesas
+                    {importPreview.length} contas — {importPreview.filter((a) => a.type === "A").length} Ativos, {importPreview.filter((a) => a.type === "R").length} Receitas, {importPreview.filter((a) => a.type === "D").length} Despesas
                   </p>
                   <p className="text-cf-green/80 text-xs mt-1">
                     Vinculando a: <strong>{clientName(targetClientId)}</strong>
@@ -304,8 +313,8 @@ export default function AccountsView({ clients, onUpdate }: Props) {
                   </table>
                 </div>
                 <div className="flex gap-3">
-                  <button className="cf-btn-primary" onClick={confirmImport}>
-                    ✓ Vincular a {clientName(targetClientId)} ({importPreview.length} contas)
+                  <button className="cf-btn-primary flex items-center gap-2" onClick={confirmImport}>
+                    <CheckCircle2 className="w-4 h-4" /> Vincular a {clientName(targetClientId)} ({importPreview.length} contas)
                   </button>
                   <button className="cf-btn-secondary" onClick={() => { setImportPreview(null); setImportMode(null); setDuplicateClients([]); }}>Cancelar</button>
                 </div>
@@ -313,8 +322,9 @@ export default function AccountsView({ clients, onUpdate }: Props) {
             )}
 
             {importMode === "done" && (
-              <div className="px-3 py-2 rounded-lg bg-cf-green/10 border border-cf-green/30">
-                <p className="text-cf-green text-sm font-medium">✓ Plano vinculado com sucesso a {clientName(targetClientId)}!</p>
+              <div className="px-3 py-2 rounded-lg bg-cf-green/10 border border-cf-green/30 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-cf-green" />
+                <p className="text-cf-green text-sm font-medium">Plano vinculado com sucesso a {clientName(targetClientId)}!</p>
               </div>
             )}
           </div>
@@ -322,7 +332,10 @@ export default function AccountsView({ clients, onUpdate }: Props) {
           {/* Replicate */}
           {clientCharts.length > 0 && (
             <div className="cf-card space-y-3">
-              <h3 className="font-semibold text-sm">🔄 Replicar plano para outra empresa</h3>
+              <div className="flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-primary" />
+                <h3 className="font-semibold text-sm">Replicar plano para outra empresa</h3>
+              </div>
               <div className="flex gap-3 flex-wrap items-end">
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1">Copiar de</label>
@@ -433,7 +446,6 @@ export default function AccountsView({ clients, onUpdate }: Props) {
             </div>
           </div>
 
-          {/* Search */}
           <input
             className="cf-input w-full max-w-md"
             placeholder="Buscar por nome ou código..."
@@ -441,7 +453,6 @@ export default function AccountsView({ clients, onUpdate }: Props) {
             onChange={(e) => setSearch(e.target.value)}
           />
 
-          {/* Group filter */}
           <div className="flex gap-2 flex-wrap">
             <button
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filterGroup === "all" ? "bg-primary/20 text-primary" : "bg-secondary text-muted-foreground hover:text-foreground"}`}
@@ -463,7 +474,6 @@ export default function AccountsView({ clients, onUpdate }: Props) {
             })}
           </div>
 
-          {/* Table */}
           <div className="cf-card p-0 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="cf-table">

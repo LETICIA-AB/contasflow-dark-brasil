@@ -185,7 +185,7 @@ export default function AccountantDashboardView({ clients }: Props) {
             </div>
           ) : (
             <div className="p-8 text-center text-muted-foreground text-sm">
-              Nenhum alerta ativo 🎉
+              Nenhum alerta ativo
             </div>
           )}
         </div>

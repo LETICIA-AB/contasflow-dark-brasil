@@ -2,6 +2,7 @@ import { useState } from "react";
 import { CATEGORIES, type Client, type Transaction, loadClients, saveClients } from "@/data/store";
 import { resolveAccounts } from "@/data/chartOfAccounts";
 import { recordClassification, classifyTransaction } from "@/data/classificationRules";
+import { Zap, Clock, CheckCircle2, PartyPopper, Upload } from "lucide-react";
 
 interface Props {
   client: Client;
@@ -16,7 +17,6 @@ export default function ConfirmView({ client, onUpdate }: Props) {
   const classified = total - pending.length;
   const progress = total > 0 ? Math.round((classified / total) * 100) : 100;
 
-  // Get AI/memory suggestions for pending transactions
   const getSuggestion = (tx: Transaction): string | null => {
     const result = classifyTransaction(tx.description, tx.type);
     return result.auto ? result.category : null;
@@ -96,7 +96,10 @@ export default function ConfirmView({ client, onUpdate }: Props) {
           <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
         </div>
         {progress === 100 && (
-          <p className="text-cf-green text-sm mt-3 font-medium">✓ Todas classificadas! Conclua o envio na aba "Envios".</p>
+          <div className="flex items-center gap-2 text-cf-green text-sm mt-3 font-medium">
+            <CheckCircle2 className="w-4 h-4" />
+            Todas classificadas! Conclua o envio na aba "Envios".
+          </div>
         )}
       </div>
 
@@ -104,13 +107,17 @@ export default function ConfirmView({ client, onUpdate }: Props) {
       {suggestedCount > 0 && (
         <div className="cf-card border-primary/30 flex flex-col sm:flex-row items-start sm:items-center gap-4">
           <div className="flex-1">
-            <p className="text-sm font-semibold">⚡ {suggestedCount} transações com sugestão da IA</p>
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Zap className="w-4 h-4 text-primary" />
+              {suggestedCount} transações com sugestão da IA
+            </div>
             <p className="text-xs text-muted-foreground mt-0.5">
               A IA identificou a categoria para essas transações. Confirme todas de uma vez ou revise individualmente.
             </p>
           </div>
-          <button className="cf-btn-primary whitespace-nowrap" onClick={handleConfirmAll}>
-            ✓ Confirmar todas as sugestões
+          <button className="cf-btn-primary whitespace-nowrap flex items-center gap-2" onClick={handleConfirmAll}>
+            <CheckCircle2 className="w-4 h-4" />
+            Confirmar todas as sugestões
           </button>
         </div>
       )}
@@ -118,8 +125,9 @@ export default function ConfirmView({ client, onUpdate }: Props) {
       {/* Pending transactions */}
       {pending.length > 0 ? (
         <div className="cf-card border-cf-yellow/30 p-0 overflow-hidden">
-          <div className="px-5 py-4 border-b border-border bg-cf-yellow/5">
-            <h3 className="font-semibold text-cf-yellow">⏳ {pending.length} transações pendentes</h3>
+          <div className="px-5 py-4 border-b border-border bg-cf-yellow/5 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-cf-yellow" />
+            <h3 className="font-semibold text-cf-yellow">{pending.length} transações pendentes</h3>
           </div>
           <div className="divide-y divide-border/50">
             {pendingWithSuggestions.map(({ tx, suggestion }) => (
@@ -133,17 +141,17 @@ export default function ConfirmView({ client, onUpdate }: Props) {
                   </p>
                   {suggestion && (
                     <p className="text-xs mt-1">
-                      <span className="cf-badge-accent">⚡ Sugestão: {suggestion}</span>
+                      <span className="cf-badge-accent inline-flex items-center gap-1"><Zap className="w-3 h-3" /> Sugestão: {suggestion}</span>
                     </p>
                   )}
                 </div>
                 <div className="flex gap-2 items-center">
                   {suggestion && (
                     <button
-                      className="cf-btn-primary text-xs py-1.5 px-3"
+                      className="cf-btn-primary text-xs py-1.5 px-3 flex items-center gap-1"
                       onClick={() => handleClassify(tx.id, suggestion)}
                     >
-                      ✓ Confirmar
+                      <CheckCircle2 className="w-3 h-3" /> Confirmar
                     </button>
                   )}
                   <select
@@ -161,13 +169,13 @@ export default function ConfirmView({ client, onUpdate }: Props) {
         </div>
       ) : total > 0 ? (
         <div className="cf-card text-center py-12">
-          <p className="text-4xl mb-3">🎉</p>
+          <PartyPopper className="w-10 h-10 mx-auto mb-3 text-primary" />
           <p className="text-lg font-semibold">Tudo conferido!</p>
           <p className="text-sm text-muted-foreground mt-1">Todas as transações foram classificadas. Volte à aba "Envios" para concluir.</p>
         </div>
       ) : (
         <div className="cf-card text-center py-12">
-          <p className="text-4xl mb-3">📤</p>
+          <Upload className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
           <p className="text-lg font-semibold">Nenhuma transação ainda</p>
           <p className="text-sm text-muted-foreground mt-1">Envie um extrato na aba "Envios" para começar.</p>
         </div>

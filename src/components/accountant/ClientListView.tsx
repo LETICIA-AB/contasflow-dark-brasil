@@ -1,5 +1,6 @@
 import type { Client } from "@/data/store";
 import { formatCurrency } from "@/data/store";
+import { Tag, FileSearch, CheckCircle2 } from "lucide-react";
 
 interface Props {
   clients: Client[];
@@ -12,9 +13,9 @@ export default function ClientListView({ clients, onSelectClient }: Props) {
   const approved = clients.filter((c) => c.status === "approved").length;
 
   const statusBadge = (s: string) => {
-    if (s === "classify") return <span className="cf-badge-yellow">🏷️ Classificar</span>;
-    if (s === "review") return <span className="cf-badge-blue">📋 Revisar</span>;
-    return <span className="cf-badge-green">✓ Aprovado</span>;
+    if (s === "classify") return <span className="cf-badge-yellow inline-flex items-center gap-1"><Tag className="w-3 h-3" /> Classificar</span>;
+    if (s === "review") return <span className="cf-badge-blue inline-flex items-center gap-1"><FileSearch className="w-3 h-3" /> Revisar</span>;
+    return <span className="cf-badge-green inline-flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Aprovado</span>;
   };
 
   return (

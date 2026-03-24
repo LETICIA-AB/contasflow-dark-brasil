@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { CATEGORIES, type Client, type Transaction, type ValidationFlag, loadClients, saveClients } from "@/data/store";
 import { runValidation, getValidationSummary } from "@/data/validationEngine";
+import { ShieldCheck, Zap, AlertCircle, AlertTriangle, Info, Check, X, Flag, StickyNote, Download, User, Brain, Clock, PenLine } from "lucide-react";
 
 interface Props {
   client: Client;
@@ -22,19 +23,19 @@ function ConfidenceBadge({ score }: { score: number }) {
 }
 
 function FlagIcon({ severity }: { severity: string }) {
-  if (severity === "error") return <span className="text-cf-red">⛔</span>;
-  if (severity === "warning") return <span className="text-cf-yellow">⚠️</span>;
-  return <span className="text-cf-blue">ℹ️</span>;
+  if (severity === "error") return <AlertCircle className="w-3.5 h-3.5 text-cf-red shrink-0" />;
+  if (severity === "warning") return <AlertTriangle className="w-3.5 h-3.5 text-cf-yellow shrink-0" />;
+  return <Info className="w-3.5 h-3.5 text-cf-blue shrink-0" />;
 }
 
 function RiskIndicator({ level }: { level: "low" | "medium" | "high" }) {
   const config = {
-    low: { label: "Risco Baixo", badge: "cf-badge-green", icon: "🛡️" },
-    medium: { label: "Risco Médio", badge: "cf-badge-yellow", icon: "⚡" },
-    high: { label: "Risco Alto", badge: "cf-badge-red", icon: "🔴" },
+    low: { label: "Risco Baixo", badge: "cf-badge-green", Icon: ShieldCheck },
+    medium: { label: "Risco Médio", badge: "cf-badge-yellow", Icon: Zap },
+    high: { label: "Risco Alto", badge: "cf-badge-red", Icon: AlertCircle },
   };
   const c = config[level];
-  return <span className={c.badge}>{c.icon} {c.label}</span>;
+  return <span className={`${c.badge} inline-flex items-center gap-1`}><c.Icon className="w-3 h-3" /> {c.label}</span>;
 }
 
 type TabFilter = "all" | "flagged" | "validated" | "pending";
@@ -130,11 +131,11 @@ export default function ReviewView({ client, onUpdate, onExport }: Props) {
   };
 
   const originBadge = (t: Transaction) => {
-    if (t.validated || t.approved) return <span className="cf-badge-green text-[10px]">✓ Validado</span>;
-    if (t.classifiedBy === "auto") return <span className="cf-badge-accent text-[10px]">⚡ IA {t.ruleId ?? ""}</span>;
-    if (t.classifiedBy === "client") return <span className="cf-badge-blue text-[10px]">👤 Cliente</span>;
-    if (t.classifiedBy === "accountant") return <span className="cf-badge-purple text-[10px]">✍ Contador</span>;
-    return <span className="cf-badge-yellow text-[10px]">⏳ Pendente</span>;
+    if (t.validated || t.approved) return <span className="cf-badge-green text-[10px] inline-flex items-center gap-0.5"><Check className="w-3 h-3" /> Validado</span>;
+    if (t.classifiedBy === "auto") return <span className="cf-badge-accent text-[10px] inline-flex items-center gap-0.5"><Zap className="w-3 h-3" /> IA {t.ruleId ?? ""}</span>;
+    if (t.classifiedBy === "client") return <span className="cf-badge-blue text-[10px] inline-flex items-center gap-0.5"><User className="w-3 h-3" /> Cliente</span>;
+    if (t.classifiedBy === "accountant") return <span className="cf-badge-purple text-[10px] inline-flex items-center gap-0.5"><PenLine className="w-3 h-3" /> Contador</span>;
+    return <span className="cf-badge-yellow text-[10px] inline-flex items-center gap-0.5"><Clock className="w-3 h-3" /> Pendente</span>;
   };
 
   const tabCounts: Record<TabFilter, number> = {
@@ -142,6 +143,21 @@ export default function ReviewView({ client, onUpdate, onExport }: Props) {
     flagged: validatedTxs.filter((t) => (t.validationFlags?.length ?? 0) > 0 && !t.validated && !t.approved).length,
     validated: validatedTxs.filter((t) => t.validated || t.approved).length,
     pending: validatedTxs.filter((t) => t.classifiedBy === "pending").length,
+  };
+
+  const sourceLabels: Record<string, { Icon: typeof Zap; label: string }> = {
+    auto: { Icon: Zap, label: "IA Automática" },
+    client: { Icon: User, label: "Cliente" },
+    accountant: { Icon: PenLine, label: "Contador" },
+    memory: { Icon: Brain, label: "Memória IA" },
+    pending: { Icon: Clock, label: "Pendente" },
+  };
+
+  const tabIcons: Record<TabFilter, { label: string; Icon?: typeof Flag }> = {
+    all: { label: "Todas" },
+    flagged: { label: "Com alertas", Icon: Flag },
+    validated: { label: "Validadas", Icon: Check as typeof Flag },
+    pending: { label: "Pendentes", Icon: Clock as typeof Flag },
   };
 
   return (
@@ -153,11 +169,11 @@ export default function ReviewView({ client, onUpdate, onExport }: Props) {
           <p className="text-muted-foreground text-sm mt-1">{client.cnpj} · {client.regime} · {client.bank}</p>
         </div>
         <div className="flex gap-3 flex-wrap">
-          <button className="cf-btn-primary" disabled={pending > 0 || summary.errors > 0} onClick={handleValidateAll}>
-            ✓ Validar todos
+          <button className="cf-btn-primary flex items-center gap-2" disabled={pending > 0 || summary.errors > 0} onClick={handleValidateAll}>
+            <Check className="w-4 h-4" /> Validar todos
           </button>
-          <button className="cf-btn-secondary" onClick={() => onExport(client.id)}>
-            📥 Exportar
+          <button className="cf-btn-secondary flex items-center gap-2" onClick={() => onExport(client.id)}>
+            <Download className="w-4 h-4" /> Exportar
           </button>
         </div>
       </div>
@@ -196,16 +212,12 @@ export default function ReviewView({ client, onUpdate, onExport }: Props) {
         <h3 className="text-sm font-semibold mb-3">Origem das Classificações</h3>
         <div className="flex gap-4 flex-wrap">
           {Object.entries(summary.bySource).map(([src, count]) => {
-            const labels: Record<string, string> = {
-              auto: "⚡ IA Automática",
-              client: "👤 Cliente",
-              accountant: "✍ Contador",
-              memory: "🧠 Memória IA",
-              pending: "⏳ Pendente",
-            };
+            const config = sourceLabels[src];
+            if (!config) return null;
             return (
               <div key={src} className="flex items-center gap-2">
-                <span className="text-sm">{labels[src] ?? src}</span>
+                <config.Icon className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="text-sm">{config.label}</span>
                 <span className="cf-badge-accent text-xs">{count}</span>
               </div>
             );
@@ -216,24 +228,20 @@ export default function ReviewView({ client, onUpdate, onExport }: Props) {
       {/* Filter tabs */}
       <div className="flex gap-2 flex-wrap">
         {(["all", "flagged", "validated", "pending"] as TabFilter[]).map((tab) => {
-          const labels: Record<TabFilter, string> = {
-            all: "Todas",
-            flagged: "🚩 Com alertas",
-            validated: "✓ Validadas",
-            pending: "⏳ Pendentes",
-          };
+          const config = tabIcons[tab];
           return (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`cf-btn text-xs py-1.5 px-3 ${
+              className={`cf-btn text-xs py-1.5 px-3 flex items-center gap-1.5 ${
                 activeTab === tab
                   ? "text-primary-foreground"
                   : "bg-secondary text-muted-foreground hover:text-foreground"
               }`}
               style={activeTab === tab ? { background: "var(--gradient-primary)" } : {}}
             >
-              {labels[tab]} ({tabCounts[tab]})
+              {config.Icon && <config.Icon className="w-3 h-3" />}
+              {config.label} ({tabCounts[tab]})
             </button>
           );
         })}
@@ -270,13 +278,11 @@ export default function ReviewView({ client, onUpdate, onExport }: Props) {
                         onClick={() => setExpandedTx(isExpanded ? null : tx.id)}
                       >
                         {tx.description}
-                        {tx.accountantNote && <span className="ml-1 text-cf-blue text-[10px]">📝</span>}
+                        {tx.accountantNote && <StickyNote className="w-3 h-3 text-cf-blue inline ml-1" />}
                       </button>
 
-                      {/* Expanded detail panel */}
                       {isExpanded && (
                         <div className="mt-3 space-y-3 animate-fade-in">
-                          {/* Flags */}
                           {hasFlags && (
                             <div className="space-y-1.5">
                               {tx.validationFlags!.map((flag, i) => (
@@ -288,14 +294,13 @@ export default function ReviewView({ client, onUpdate, onExport }: Props) {
                             </div>
                           )}
 
-                          {/* Note */}
                           {tx.accountantNote && (
-                            <div className="text-xs text-cf-blue px-3 py-2 rounded-lg bg-cf-blue/5 border border-cf-blue/10">
-                              📝 {tx.accountantNote}
+                            <div className="text-xs text-cf-blue px-3 py-2 rounded-lg bg-cf-blue/5 border border-cf-blue/10 flex items-start gap-2">
+                              <StickyNote className="w-3 h-3 shrink-0 mt-0.5" />
+                              {tx.accountantNote}
                             </div>
                           )}
 
-                          {/* Add note input */}
                           <div className="flex gap-2">
                             <input
                               className="cf-input text-xs py-1.5 flex-1"
@@ -309,17 +314,16 @@ export default function ReviewView({ client, onUpdate, onExport }: Props) {
                             </button>
                           </div>
 
-                          {/* Action buttons */}
                           {!tx.validated && !tx.approved && tx.classifiedBy !== "pending" && (
                             <div className="flex gap-2">
-                              <button className="cf-btn-primary text-xs py-1.5 px-4" onClick={() => handleValidate(tx.id)}>
-                                ✓ Validar
+                              <button className="cf-btn-primary text-xs py-1.5 px-4 flex items-center gap-1" onClick={() => handleValidate(tx.id)}>
+                                <Check className="w-3 h-3" /> Validar
                               </button>
                               <button
-                                className="cf-btn text-xs py-1.5 px-4 bg-cf-red/10 text-cf-red border border-cf-red/20 hover:bg-cf-red/20"
+                                className="cf-btn text-xs py-1.5 px-4 bg-cf-red/10 text-cf-red border border-cf-red/20 hover:bg-cf-red/20 flex items-center gap-1"
                                 onClick={() => handleReject(tx.id)}
                               >
-                                ✕ Rejeitar
+                                <X className="w-3 h-3" /> Rejeitar
                               </button>
                             </div>
                           )}
@@ -348,10 +352,10 @@ export default function ReviewView({ client, onUpdate, onExport }: Props) {
                     <td>
                       {hasFlags ? (
                         <button
-                          className="cf-badge-yellow text-[10px] cursor-pointer hover:opacity-80"
+                          className="cf-badge-yellow text-[10px] cursor-pointer hover:opacity-80 inline-flex items-center gap-0.5"
                           onClick={() => setExpandedTx(isExpanded ? null : tx.id)}
                         >
-                          🚩 {flagCount}
+                          <Flag className="w-3 h-3" /> {flagCount}
                         </button>
                       ) : (
                         <span className="text-muted-foreground text-xs">—</span>
@@ -365,19 +369,19 @@ export default function ReviewView({ client, onUpdate, onExport }: Props) {
                             title="Validar"
                             onClick={() => handleValidate(tx.id)}
                           >
-                            ✓
+                            <Check className="w-4 h-4" />
                           </button>
                           <button
                             className="w-7 h-7 rounded-md flex items-center justify-center text-cf-red hover:bg-cf-red/10 transition-colors"
                             title="Rejeitar"
                             onClick={() => handleReject(tx.id)}
                           >
-                            ✕
+                            <X className="w-4 h-4" />
                           </button>
                         </div>
                       )}
                       {(tx.validated || tx.approved) && (
-                        <span className="text-cf-green text-xs">✓</span>
+                        <Check className="w-4 h-4 text-cf-green" />
                       )}
                     </td>
                   </tr>

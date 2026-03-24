@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { type Client, formatCurrency } from "@/data/store";
+import { AlertTriangle, ChevronUp, BarChart3 } from "lucide-react";
 
 interface Props {
   client: Client;
@@ -24,7 +25,6 @@ export default function DashboardView({ client }: Props) {
   const balance = totalIn - totalOut;
   const pending = txs.filter((t) => t.classifiedBy === "pending").length;
 
-  // Monthly data
   const monthlyData = monthKeys.map((mk, i) => {
     const mCredits = txs.filter((t) => t.date.startsWith(mk) && t.type === "credit").reduce((s, t) => s + t.amount, 0);
     const mDebits = txs.filter((t) => t.date.startsWith(mk) && t.type === "debit").reduce((s, t) => s + t.amount, 0);
@@ -32,7 +32,6 @@ export default function DashboardView({ client }: Props) {
   });
   const maxVal = Math.max(...monthlyData.flatMap((m) => [m.credits, m.debits]), 1);
 
-  // Category breakdown by month (horizontal analysis)
   const categories = [...new Set(debits.map((t) => t.category || "Não classificado"))];
   const catByMonth: Record<string, number[]> = {};
   categories.forEach((cat) => {
@@ -42,7 +41,6 @@ export default function DashboardView({ client }: Props) {
     );
   });
 
-  // Totals per month
   const monthTotals = monthKeys.map((_, i) =>
     categories.reduce((s, cat) => s + (catByMonth[cat]?.[i] || 0), 0)
   );
@@ -62,8 +60,9 @@ export default function DashboardView({ client }: Props) {
       </div>
 
       {pending > 0 && (
-        <div className="cf-card border-cf-yellow/30 bg-cf-yellow/5">
-          <p className="text-cf-yellow text-sm font-medium">⚠ {pending} transações aguardando classificação</p>
+        <div className="cf-card border-cf-yellow/30 bg-cf-yellow/5 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-cf-yellow shrink-0" />
+          <p className="text-cf-yellow text-sm font-medium">{pending} transações aguardando classificação</p>
         </div>
       )}
 
@@ -151,7 +150,9 @@ export default function DashboardView({ client }: Props) {
                       <td className={`text-right text-sm font-medium ${v.pct > 0 ? "text-cf-red" : v.pct < 0 ? "text-cf-green" : ""}`}>
                         {v.pct !== 0 ? `${v.pct > 0 ? "↑" : "↓"}${Math.abs(v.pct).toFixed(1)}%` : "—"}
                       </td>
-                      <td className="text-center text-muted-foreground">{isExpanded ? "▲" : "📊"}</td>
+                      <td className="text-center text-muted-foreground">
+                        {isExpanded ? <ChevronUp className="w-4 h-4 inline" /> : <BarChart3 className="w-4 h-4 inline" />}
+                      </td>
                     </tr>
                     {isExpanded && (
                       <tr key={`${cat}-chart`}>
@@ -179,7 +180,6 @@ export default function DashboardView({ client }: Props) {
                   </>
                 );
               })}
-              {/* Totals row */}
               <tr className="font-bold bg-secondary/30">
                 <td>TOTAL</td>
                 {monthTotals.map((val, i) => <td key={i} className="text-right text-sm">{formatCurrency(val)}</td>)}
