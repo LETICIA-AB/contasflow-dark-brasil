@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Session, Client } from "@/data/store";
+import { ThemeToggle } from "./ThemeToggle";
 
 interface SidebarProps {
   session: Session;
@@ -55,7 +56,7 @@ export default function Sidebar({ session, client, activeView, onNavigate, onLog
           ${open ? "translate-x-0" : "-translate-x-full"}
         `}
         style={{
-          background: "linear-gradient(180deg, hsl(222 38% 6%) 0%, hsl(222 38% 4.5%) 100%)",
+          background: "var(--sidebar-bg)",
         }}
       >
         {/* Brand */}
@@ -113,14 +114,15 @@ export default function Sidebar({ session, client, activeView, onNavigate, onLog
           ))}
         </nav>
 
-        {/* Logout */}
-        <div className="p-4 border-t border-border/40">
+        {/* Footer */}
+        <div className="p-4 border-t border-border/40 flex items-center justify-between">
           <button
             onClick={onLogout}
-            className="cf-btn-ghost w-full text-sm justify-start opacity-70 hover:opacity-100"
+            className="cf-btn-ghost text-sm justify-start opacity-70 hover:opacity-100"
           >
             ← Sair
           </button>
+          <ThemeToggle />
         </div>
       </aside>
     </>

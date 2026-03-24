@@ -74,8 +74,7 @@ export default function NotificationPanel({ onNavigateToClient }: Props) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-12 w-80 max-h-96 rounded-xl border border-border/60 shadow-2xl overflow-hidden z-50"
-          style={{ background: "hsl(222 38% 8%)" }}
+        <div className="absolute right-0 top-12 w-80 max-h-96 rounded-xl border border-border/60 shadow-2xl overflow-hidden z-50 bg-card"
         >
           <div className="px-4 py-3 border-b border-border/40 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-foreground">Notificações</h3>

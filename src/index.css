@@ -59,6 +59,63 @@
     --gradient-primary: linear-gradient(135deg, hsl(165 80% 44%), hsl(175 70% 38%));
     --gradient-surface: linear-gradient(180deg, hsl(220 35% 9%) 0%, hsl(220 35% 7%) 100%);
     --gradient-glow: radial-gradient(ellipse at 50% 0%, hsl(165 80% 44% / 0.08) 0%, transparent 60%);
+    --sidebar-bg: linear-gradient(180deg, hsl(222 38% 6%) 0%, hsl(222 38% 4.5%) 100%);
+    --notif-bg: hsl(222 38% 8%);
+  }
+
+  .light {
+    --background: 0 0% 97%;
+    --foreground: 222 30% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 30% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 30% 15%;
+
+    --primary: 165 80% 38%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 15% 92%;
+    --secondary-foreground: 222 30% 15%;
+
+    --muted: 220 12% 90%;
+    --muted-foreground: 215 15% 45%;
+
+    --accent: 165 80% 38%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 52%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 15% 86%;
+    --input: 220 15% 86%;
+    --ring: 165 80% 38%;
+
+    --cf-green: 160 60% 38%;
+    --cf-red: 0 72% 50%;
+    --cf-yellow: 40 90% 42%;
+    --cf-blue: 215 85% 50%;
+    --cf-purple: 260 70% 55%;
+
+    --sidebar-background: 220 20% 96%;
+    --sidebar-foreground: 222 30% 15%;
+    --sidebar-primary: 165 80% 38%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 15% 92%;
+    --sidebar-accent-foreground: 222 30% 15%;
+    --sidebar-border: 220 15% 88%;
+    --sidebar-ring: 165 80% 38%;
+
+    --glow-primary: 0 0 20px hsl(165 80% 44% / 0.1);
+    --glow-primary-strong: 0 0 30px hsl(165 80% 44% / 0.12);
+    --shadow-card: 0 1px 3px hsl(0 0% 0% / 0.06), 0 4px 12px hsl(0 0% 0% / 0.04);
+    --shadow-elevated: 0 4px 16px hsl(0 0% 0% / 0.08), 0 8px 32px hsl(0 0% 0% / 0.04);
+    --gradient-primary: linear-gradient(135deg, hsl(165 80% 38%), hsl(175 70% 34%));
+    --gradient-surface: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(220 15% 98%) 100%);
+    --gradient-glow: radial-gradient(ellipse at 50% 0%, hsl(165 80% 44% / 0.04) 0%, transparent 60%);
+    --sidebar-bg: linear-gradient(180deg, hsl(220 20% 97%) 0%, hsl(220 20% 95%) 100%);
+    --notif-bg: hsl(0 0% 100%);
   }
 }
 
