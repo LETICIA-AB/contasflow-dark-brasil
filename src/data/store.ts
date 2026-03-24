@@ -1,4 +1,10 @@
 // === Types ===
+export type ValidationFlag = {
+  type: "duplicate" | "unusual_amount" | "missing_category" | "low_confidence" | "manual_review" | "category_mismatch";
+  severity: "info" | "warning" | "error";
+  message: string;
+};
+
 export interface Transaction {
   id: string;
   date: string;
@@ -11,6 +17,12 @@ export interface Transaction {
   debitAccount?: string;
   creditAccount?: string;
   approved: boolean;
+  // Validation layer
+  validationFlags?: ValidationFlag[];
+  confidenceScore?: number; // 0-100
+  accountantNote?: string;
+  validated?: boolean; // explicitly validated by accountant
+  rejectedBy?: "accountant";
 }
 
 export interface Client {
