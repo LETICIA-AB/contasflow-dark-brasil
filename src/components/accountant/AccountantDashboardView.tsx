@@ -1,11 +1,27 @@
 import { useMemo } from "react";
+import { motion } from "framer-motion";
 import { type Client, loadClients } from "@/data/store";
 import { runValidation, getValidationSummary, type ValidationSummary } from "@/data/validationEngine";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
+import { Users, ArrowRightLeft, Bot, AlertTriangle } from "lucide-react";
 
 interface Props {
   clients: Client[];
 }
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: i * 0.08, duration: 0.45, ease: [0.22, 1, 0.36, 1] },
+  }),
+};
+
+const hoverCard = {
+  rest: { scale: 1, y: 0 },
+  hover: { scale: 1.02, y: -2, transition: { duration: 0.25, ease: "easeOut" } },
+};
 
 export default function AccountantDashboardView({ clients }: Props) {
   const analytics = useMemo(() => {
@@ -27,14 +43,12 @@ export default function AccountantDashboardView({ clients }: Props) {
       ? Math.round(clientData.reduce((s, d) => s + d.summary.avgConfidence, 0) / clientData.length)
       : 0;
 
-    // Revenue vs Expense chart data
     const chartData = clientData.map((d) => ({
       name: d.client.name.split(" ").slice(0, 2).join(" "),
       receita: d.totalCredit,
       despesa: d.totalDebit,
     }));
 
-    // Risk ranking
     const riskRanking = clientData
       .map((d) => ({
         name: d.client.name,
@@ -48,7 +62,6 @@ export default function AccountantDashboardView({ clients }: Props) {
         return riskOrder[a.riskLevel] - riskOrder[b.riskLevel];
       });
 
-    // Recent alerts
     const recentAlerts = clientData.flatMap((d) =>
       d.validated
         .filter((tx) => (tx.validationFlags?.length ?? 0) > 0 && !tx.validated && !tx.approved)
@@ -77,38 +90,96 @@ export default function AccountantDashboardView({ clients }: Props) {
     return <span className="cf-badge-yellow">Classificando</span>;
   };
 
+  const summaryCards = [
+    {
+      label: "Clientes",
+      value: analytics.clientCount,
+      icon: Users,
+      gradient: "from-[hsl(212,85%,58%)] to-[hsl(212,70%,45%)]",
+      iconBg: "bg-[hsl(212,85%,58%,0.12)]",
+      iconColor: "text-cf-blue",
+    },
+    {
+      label: "Transações",
+      value: analytics.totalTx,
+      icon: ArrowRightLeft,
+      gradient: "from-[hsl(260,70%,65%)] to-[hsl(260,60%,50%)]",
+      iconBg: "bg-[hsl(260,70%,65%,0.12)]",
+      iconColor: "text-cf-purple",
+    },
+    {
+      label: "Automação IA",
+      value: `${analytics.automationRate}%`,
+      icon: Bot,
+      gradient: "from-primary to-[hsl(170,80%,34%)]",
+      iconBg: "bg-primary/12",
+      iconColor: "text-primary",
+      highlight: true,
+      sub: "classificadas por IA + Memória",
+    },
+    {
+      label: "Alertas Ativos",
+      value: analytics.totalAlerts,
+      icon: AlertTriangle,
+      gradient: analytics.totalAlerts > 0 ? "from-[hsl(0,72%,55%)] to-[hsl(0,60%,45%)]" : "from-primary to-[hsl(170,80%,34%)]",
+      iconBg: analytics.totalAlerts > 0 ? "bg-[hsl(0,72%,55%,0.12)]" : "bg-primary/12",
+      iconColor: analytics.totalAlerts > 0 ? "text-cf-red" : "text-cf-green",
+    },
+  ];
+
   return (
-    <div className="space-y-6 cf-stagger">
-      <div>
+    <div className="space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+      >
         <h2 className="text-2xl font-bold font-heading">Painel Geral</h2>
         <p className="text-muted-foreground text-sm mt-1">Visão consolidada de todos os clientes</p>
-      </div>
+      </motion.div>
 
-      {/* Summary cards */}
+      {/* Summary cards with gradients */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="cf-card">
-          <p className="text-muted-foreground text-xs mb-1 uppercase tracking-wider">Clientes</p>
-          <p className="text-3xl font-bold font-heading">{analytics.clientCount}</p>
-        </div>
-        <div className="cf-card">
-          <p className="text-muted-foreground text-xs mb-1 uppercase tracking-wider">Transações</p>
-          <p className="text-3xl font-bold font-heading">{analytics.totalTx}</p>
-        </div>
-        <div className="cf-card border-primary/30">
-          <p className="text-muted-foreground text-xs mb-1 uppercase tracking-wider">Automação IA</p>
-          <p className="text-3xl font-bold font-heading text-primary">{analytics.automationRate}%</p>
-          <p className="text-xs text-muted-foreground mt-1">classificadas por IA + Memória</p>
-        </div>
-        <div className="cf-card">
-          <p className="text-muted-foreground text-xs mb-1 uppercase tracking-wider">Alertas Ativos</p>
-          <p className={`text-3xl font-bold font-heading ${analytics.totalAlerts > 0 ? "text-cf-red" : "text-cf-green"}`}>
-            {analytics.totalAlerts}
-          </p>
-        </div>
+        {summaryCards.map((card, i) => (
+          <motion.div
+            key={card.label}
+            custom={i}
+            initial="hidden"
+            animate="visible"
+            variants={cardVariants}
+            whileHover="hover"
+          >
+            <motion.div
+              variants={hoverCard}
+              className={`cf-card relative overflow-hidden ${card.highlight ? "border-primary/30" : ""}`}
+            >
+              {/* Subtle gradient overlay */}
+              <div className={`absolute top-0 right-0 w-24 h-24 rounded-full bg-gradient-to-br ${card.gradient} opacity-[0.06] blur-2xl -translate-y-6 translate-x-6`} />
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-muted-foreground text-xs uppercase tracking-wider">{card.label}</p>
+                  <div className={`w-8 h-8 rounded-lg ${card.iconBg} flex items-center justify-center`}>
+                    <card.icon className={`w-4 h-4 ${card.iconColor}`} />
+                  </div>
+                </div>
+                <p className={`text-3xl font-bold font-heading ${card.highlight ? "text-primary" : card.iconColor}`}>
+                  {card.value}
+                </p>
+                {card.sub && <p className="text-xs text-muted-foreground mt-1">{card.sub}</p>}
+              </div>
+            </motion.div>
+          </motion.div>
+        ))}
       </div>
 
       {/* Revenue vs Expense chart */}
-      <div className="cf-card">
+      <motion.div
+        className="cf-card relative overflow-hidden"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.35, duration: 0.45 }}
+      >
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/60 via-primary/20 to-transparent" />
         <h3 className="font-semibold mb-4">Receita vs Despesa por Cliente</h3>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
@@ -126,18 +197,29 @@ export default function AccountantDashboardView({ clients }: Props) {
             </BarChart>
           </ResponsiveContainer>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Risk ranking + Recent alerts side by side */}
+      {/* Risk ranking + Recent alerts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Risk ranking */}
-        <div className="cf-card p-0 overflow-hidden">
+        <motion.div
+          className="cf-card p-0 overflow-hidden relative"
+          initial={{ opacity: 0, x: -16 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.45, duration: 0.45 }}
+        >
+          <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-primary/60 via-primary/20 to-transparent" />
           <div className="px-5 py-4 border-b border-border">
             <h3 className="font-semibold">Ranking de Risco</h3>
           </div>
           <div className="divide-y divide-border/50">
             {analytics.riskRanking.map((r, i) => (
-              <div key={i} className="px-5 py-3 flex items-center justify-between">
+              <motion.div
+                key={i}
+                className="px-5 py-3 flex items-center justify-between transition-colors hover:bg-secondary/20"
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.5 + i * 0.06, duration: 0.35 }}
+              >
                 <div>
                   <p className="text-sm font-medium">{r.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
@@ -148,20 +230,31 @@ export default function AccountantDashboardView({ clients }: Props) {
                   {statusBadge(r.status)}
                   {riskBadge(r.riskLevel)}
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
-        </div>
+        </motion.div>
 
-        {/* Recent alerts */}
-        <div className="cf-card p-0 overflow-hidden">
+        <motion.div
+          className="cf-card p-0 overflow-hidden relative"
+          initial={{ opacity: 0, x: 16 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.45, duration: 0.45 }}
+        >
+          <div className="absolute top-0 right-0 w-1 h-full bg-gradient-to-b from-destructive/40 via-destructive/10 to-transparent" />
           <div className="px-5 py-4 border-b border-border">
             <h3 className="font-semibold">Alertas Recentes</h3>
           </div>
           {analytics.recentAlerts.length > 0 ? (
             <div className="divide-y divide-border/50">
               {analytics.recentAlerts.map((a, i) => (
-                <div key={i} className="px-5 py-3">
+                <motion.div
+                  key={i}
+                  className="px-5 py-3 transition-colors hover:bg-secondary/20"
+                  initial={{ opacity: 0, x: 8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.5 + i * 0.06, duration: 0.35 }}
+                >
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-medium text-muted-foreground">{a.clientName}</p>
                     <span className={a.type === "credit" ? "text-cf-green text-xs" : "text-cf-red text-xs"}>
@@ -172,7 +265,7 @@ export default function AccountantDashboardView({ clients }: Props) {
                   <div className="flex flex-wrap gap-1 mt-1">
                     {a.flags.map((f, j) => (
                       <span key={j} className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                        f.severity === "error" ? "bg-cf-red/10 text-cf-red" :
+                        f.severity === "error" ? "bg-destructive/10 text-cf-red" :
                         f.severity === "warning" ? "bg-cf-yellow/10 text-cf-yellow" :
                         "bg-cf-blue/10 text-cf-blue"
                       }`}>
@@ -180,7 +273,7 @@ export default function AccountantDashboardView({ clients }: Props) {
                       </span>
                     ))}
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           ) : (
@@ -188,7 +281,7 @@ export default function AccountantDashboardView({ clients }: Props) {
               Nenhum alerta ativo
             </div>
           )}
-        </div>
+        </motion.div>
       </div>
     </div>
   );

@@ -1,10 +1,25 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { type Client, formatCurrency } from "@/data/store";
-import { AlertTriangle, ChevronUp, BarChart3 } from "lucide-react";
+import { AlertTriangle, ChevronUp, BarChart3, TrendingUp, TrendingDown, ArrowRight } from "lucide-react";
 
 interface Props {
   client: Client;
 }
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: i * 0.08, duration: 0.45, ease: [0.22, 1, 0.36, 1] },
+  }),
+};
+
+const hoverCard = {
+  rest: { scale: 1, y: 0 },
+  hover: { scale: 1.02, y: -2, transition: { duration: 0.25, ease: "easeOut" } },
+};
 
 export default function DashboardView({ client }: Props) {
   const txs = client.transactions;
@@ -52,38 +67,95 @@ export default function DashboardView({ client }: Props) {
     return { abs: last - prev, pct: prev > 0 ? ((last - prev) / prev) * 100 : 0 };
   };
 
+  const summaryCards = [
+    {
+      label: "Entradas",
+      value: formatCurrency(totalIn),
+      gradient: "from-primary to-[hsl(170,80%,34%)]",
+      iconBg: "bg-primary/12",
+      iconColor: "text-primary",
+      valueColor: "text-cf-green",
+      icon: TrendingUp,
+    },
+    {
+      label: "Saídas",
+      value: formatCurrency(totalOut),
+      gradient: "from-[hsl(0,72%,55%)] to-[hsl(0,60%,45%)]",
+      iconBg: "bg-[hsl(0,72%,55%,0.12)]",
+      iconColor: "text-cf-red",
+      valueColor: "text-cf-red",
+      icon: TrendingDown,
+    },
+    {
+      label: "Saldo",
+      value: formatCurrency(balance),
+      gradient: balance >= 0 ? "from-primary to-[hsl(170,80%,34%)]" : "from-[hsl(0,72%,55%)] to-[hsl(0,60%,45%)]",
+      iconBg: balance >= 0 ? "bg-primary/12" : "bg-[hsl(0,72%,55%,0.12)]",
+      iconColor: balance >= 0 ? "text-primary" : "text-cf-red",
+      valueColor: balance >= 0 ? "text-cf-green" : "text-cf-red",
+      icon: ArrowRight,
+    },
+  ];
+
   return (
-    <div className="space-y-6 cf-stagger">
-      <div>
+    <div className="space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+      >
         <h2 className="text-2xl font-bold">Dashboard Financeiro</h2>
         <p className="text-muted-foreground text-sm mt-1">{client.name}</p>
-      </div>
+      </motion.div>
 
       {pending > 0 && (
-        <div className="cf-card border-cf-yellow/30 bg-cf-yellow/5 flex items-center gap-2">
+        <motion.div
+          className="cf-card border-cf-yellow/30 bg-cf-yellow/5 flex items-center gap-2"
+          initial={{ opacity: 0, scale: 0.97 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.35 }}
+        >
           <AlertTriangle className="w-4 h-4 text-cf-yellow shrink-0" />
           <p className="text-cf-yellow text-sm font-medium">{pending} transações aguardando classificação</p>
-        </div>
+        </motion.div>
       )}
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="cf-card">
-          <p className="text-muted-foreground text-sm mb-1">Entradas</p>
-          <p className="text-2xl font-bold font-heading text-cf-green">{formatCurrency(totalIn)}</p>
-        </div>
-        <div className="cf-card">
-          <p className="text-muted-foreground text-sm mb-1">Saídas</p>
-          <p className="text-2xl font-bold font-heading text-cf-red">{formatCurrency(totalOut)}</p>
-        </div>
-        <div className="cf-card">
-          <p className="text-muted-foreground text-sm mb-1">Saldo</p>
-          <p className={`text-2xl font-bold font-heading ${balance >= 0 ? "text-cf-green" : "text-cf-red"}`}>{formatCurrency(balance)}</p>
-        </div>
+        {summaryCards.map((card, i) => (
+          <motion.div
+            key={card.label}
+            custom={i}
+            initial="hidden"
+            animate="visible"
+            variants={cardVariants}
+            whileHover="hover"
+          >
+            <motion.div variants={hoverCard} className="cf-card relative overflow-hidden">
+              {/* Gradient glow */}
+              <div className={`absolute top-0 right-0 w-24 h-24 rounded-full bg-gradient-to-br ${card.gradient} opacity-[0.07] blur-2xl -translate-y-6 translate-x-6`} />
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-muted-foreground text-sm">{card.label}</p>
+                  <div className={`w-8 h-8 rounded-lg ${card.iconBg} flex items-center justify-center`}>
+                    <card.icon className={`w-4 h-4 ${card.iconColor}`} />
+                  </div>
+                </div>
+                <p className={`text-2xl font-bold font-heading ${card.valueColor}`}>{card.value}</p>
+              </div>
+            </motion.div>
+          </motion.div>
+        ))}
       </div>
 
       {/* SVG Bar chart */}
-      <div className="cf-card">
+      <motion.div
+        className="cf-card relative overflow-hidden"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3, duration: 0.45 }}
+      >
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/60 via-primary/20 to-transparent" />
         <h3 className="font-semibold mb-4">Evolução mensal</h3>
         <svg viewBox={`0 0 ${Math.max(monthlyData.length * 100, 300)} 200`} className="w-full">
           {monthlyData.map((m, i) => {
@@ -92,9 +164,9 @@ export default function DashboardView({ client }: Props) {
             const debitH = (m.debits / maxVal) * 150;
             return (
               <g key={i}>
-                <rect x={x} y={180 - creditH} width={30} height={creditH} rx={4} fill="hsl(160,65%,50.4%)" opacity={0.8} />
-                <rect x={x + 35} y={180 - debitH} width={30} height={debitH} rx={4} fill="hsl(0,94%,71%)" opacity={0.8} />
-                <text x={x + 32} y={196} textAnchor="middle" fill="hsl(213,24%,47.1%)" fontSize="11" fontFamily="DM Sans">{m.label}</text>
+                <rect x={x} y={180 - creditH} width={30} height={creditH} rx={4} fill="hsl(var(--cf-green))" opacity={0.85} />
+                <rect x={x + 35} y={180 - debitH} width={30} height={debitH} rx={4} fill="hsl(var(--cf-red))" opacity={0.85} />
+                <text x={x + 32} y={196} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="11" fontFamily="Inter">{m.label}</text>
               </g>
             );
           })}
@@ -103,10 +175,16 @@ export default function DashboardView({ client }: Props) {
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-cf-green inline-block" /> Entradas</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-cf-red inline-block" /> Saídas</span>
         </div>
-      </div>
+      </motion.div>
 
       {/* Horizontal Analysis */}
-      <div className="cf-card p-0 overflow-hidden">
+      <motion.div
+        className="cf-card p-0 overflow-hidden relative"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4, duration: 0.45 }}
+      >
+        <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-cf-blue/50 via-cf-blue/10 to-transparent" />
         <div className="px-5 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-semibold">Análise Horizontal — Despesas por Categoria</h3>
           <div className="flex items-center gap-2 text-xs">
@@ -167,8 +245,8 @@ export default function DashboardView({ client }: Props) {
                                 const h = (val / maxCatVal) * 60;
                                 return (
                                   <g key={i}>
-                                    <rect x={i * 60 + 5} y={70 - h} width={40} height={h} rx={3} fill="hsl(165,100%,41.6%)" opacity={0.7} />
-                                    <text x={i * 60 + 25} y={78} textAnchor="middle" fontSize="8" fill="hsl(213,24%,47.1%)">{monthLabels[i]}</text>
+                                    <rect x={i * 60 + 5} y={70 - h} width={40} height={h} rx={3} fill="hsl(var(--primary))" opacity={0.7} />
+                                    <text x={i * 60 + 25} y={78} textAnchor="middle" fontSize="8" fill="hsl(var(--muted-foreground))">{monthLabels[i]}</text>
                                   </g>
                                 );
                               })}
@@ -190,14 +268,19 @@ export default function DashboardView({ client }: Props) {
             </tbody>
           </table>
         </div>
-      </div>
+      </motion.div>
 
       {/* Footer info */}
-      <div className="cf-card text-xs text-muted-foreground flex flex-wrap gap-x-6 gap-y-1">
+      <motion.div
+        className="cf-card text-xs text-muted-foreground flex flex-wrap gap-x-6 gap-y-1"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.5, duration: 0.4 }}
+      >
         <span>Regime: {client.regime}</span>
         <span>Banco: {client.bank}</span>
         <span>CNPJ: {client.cnpj}</span>
-      </div>
+      </motion.div>
     </div>
   );
 }
