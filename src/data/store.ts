@@ -81,6 +81,8 @@ import { classifyTransaction } from "./classificationRules";
 import { resolveAccounts } from "./chartOfAccounts";
 
 function generateTransactions(clientId: string): Transaction[] {
+  const bankMap: Record<string, string> = { c1: "Caixa Econômica Federal", c2: "Bradesco", c3: "Itaú Unibanco" };
+  const bankName = bankMap[clientId] || "Caixa Econômica Federal";
   const baseData: Record<string, [string, number, string][]> = {
     c1: [
       ["PIX REC BOOKING.COM RESERVA", 4500, "credit"],
@@ -140,6 +142,14 @@ function generateTransactions(clientId: string): Transaction[] {
     const day = String(5 + (i * 3) % 25).padStart(2, "0");
 
     const result = classifyTransaction(desc, txType);
+    const category = result.auto ? result.category : "";
+    let debitAccount = "";
+    let creditAccount = "";
+    if (result.auto) {
+      const accounts = resolveAccounts(result.category, txType, bankName);
+      debitAccount = accounts.debit;
+      creditAccount = accounts.credit;
+    }
 
     return {
       id: `${clientId}-t${i + 1}`,
@@ -147,9 +157,11 @@ function generateTransactions(clientId: string): Transaction[] {
       description: desc,
       amount: Math.abs(amt),
       type: txType,
-      category: result.auto ? result.category : "",
+      category,
       classifiedBy: result.auto ? "auto" as const : "pending" as const,
       ruleId: result.auto ? result.ruleId : undefined,
+      debitAccount,
+      creditAccount,
       approved: clientId === "c3",
     };
   });
