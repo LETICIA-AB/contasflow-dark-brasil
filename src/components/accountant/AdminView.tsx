@@ -60,11 +60,6 @@ export default function AdminView({ clients, onUpdate }: Props) {
       if (u) { u.cnpj = formCnpj; u.password = formPassword; u.clientId = formClientId; }
     }
     saveUsers(allUsers);
-    if (formClientId) {
-      const allClients = loadClients();
-      const c = allClients.find((cl) => cl.id === formClientId);
-      if (c) { c.banks = formBanks; saveClients(allClients); }
-    }
     refreshUsers();
     setEditing(null);
     onUpdate();
