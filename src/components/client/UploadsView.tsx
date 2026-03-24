@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { type Client, type Upload, loadClients, saveClients, loadUploads, saveUploads } from "@/data/store";
+import { addNotification } from "@/data/notificationStore";
 
 interface Props {
   client: Client;
