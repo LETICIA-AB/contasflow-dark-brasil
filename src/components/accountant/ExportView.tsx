@@ -16,14 +16,17 @@ export default function ExportView({ client, onBack }: Props) {
     const complement = tx.description.slice(0, 30);
     const value = tx.amount.toFixed(2);
 
-    const { debit, credit } = resolveAccounts(tx.category, tx.type, client.bank);
+    const { debit, credit } = resolveAccounts(tx.category, tx.type, client.bank, client.chartOverrides);
 
     return [dateStr, tx.category, complement, value, debit, credit, "1", "N", "", ""].join("\t");
   });
 
   const fileContent = lines.join("\n");
   const clientCode = client.id.toUpperCase();
-  const filename = `contasflow_${clientCode}_mar2026.txt`;
+  const sortedDates = txs.map((t) => t.date).sort();
+  const refDate = sortedDates[0] ?? new Date().toISOString().slice(0, 7);
+  const [year, month] = refDate.split("-");
+  const filename = `contasflow_${clientCode}_${month}${year}.txt`;
 
   const handleDownload = () => {
     const blob = new Blob([fileContent], { type: "text/plain;charset=utf-8" });

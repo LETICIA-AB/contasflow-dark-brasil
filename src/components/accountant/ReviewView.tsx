@@ -301,6 +301,13 @@ export default function ReviewView({ client, onUpdate, onExport }: Props) {
                             </div>
                           )}
 
+                          {tx.clientDescription && (
+                            <div className="text-xs text-cf-purple px-3 py-2 rounded-lg bg-cf-purple/5 border border-cf-purple/10 flex items-start gap-2">
+                              <User className="w-3 h-3 shrink-0 mt-0.5" />
+                              <span><span className="font-medium">Descrição do cliente: </span>{tx.clientDescription}</span>
+                            </div>
+                          )}
+
                           {tx.accountantNote && (
                             <div className="text-xs text-cf-blue px-3 py-2 rounded-lg bg-cf-blue/5 border border-cf-blue/10 flex items-start gap-2">
                               <StickyNote className="w-3 h-3 shrink-0 mt-0.5" />

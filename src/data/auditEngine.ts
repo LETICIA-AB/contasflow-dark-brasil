@@ -48,32 +48,56 @@ export function buildAuditLayers(tx: Transaction): AuditLayerData[] {
   };
 
   // ── Layer 3: Sugestão IA (memory / confidence) ──────────────────────
+  // "override" = a rule/memory suggestion existed but a human picked a different category
   let aiStatus: AuditLayerStatus;
   const aiDetails: Record<string, string | number | undefined> = {};
 
   if (tx.classifiedBy === "memory") {
     aiStatus = "pass";
     aiDetails["Fonte"] = "Memória IA (padrão aprendido)";
-    aiDetails["Categoria sugerida"] = tx.category;
+    aiDetails["Categoria"] = tx.category;
     aiDetails["Confiança"] = `${tx.confidenceScore ?? 0}%`;
   } else if (tx.classifiedBy === "auto" && tx.ruleId) {
     aiStatus = "pass";
     aiDetails["Fonte"] = `Regra automática ${tx.ruleId}`;
-    aiDetails["Categoria sugerida"] = tx.category;
+    aiDetails["Categoria"] = tx.category;
     aiDetails["Confiança"] = `${tx.confidenceScore ?? 0}%`;
-  } else if ((tx.classifiedBy === "client" || tx.classifiedBy === "accountant") && tx.ruleId) {
-    // A rule/memory suggestion existed but was overridden by human
-    aiStatus = "override";
-    aiDetails["Fonte"] = `Regra ${tx.ruleId} (substituída)`;
-    aiDetails["Sugestão original"] = rule?.category ?? "—";
-    aiDetails["Classificação final"] = tx.category;
+  } else if (tx.classifiedBy === "accountant" && tx.ruleId) {
+    // Accountant reclassified a transaction that had been auto-matched by a rule.
+    // ruleId is preserved on the tx object even after manual override.
+    const originalCategory = rule?.category;
+    if (originalCategory && originalCategory !== tx.category) {
+      aiStatus = "override";
+      aiDetails["Regra original"] = tx.ruleId;
+      aiDetails["Sugestão da regra"] = originalCategory;
+      aiDetails["Reclassificado para"] = tx.category;
+    } else {
+      // Accountant validated the same category the rule suggested
+      aiStatus = "pass";
+      aiDetails["Fonte"] = `Regra ${tx.ruleId} (confirmada pelo contador)`;
+      aiDetails["Categoria"] = tx.category;
+    }
+    aiDetails["Confiança"] = `${tx.confidenceScore ?? 0}%`;
+  } else if (tx.classifiedBy === "client" && tx.ruleId) {
+    // Client confirmed or changed a rule suggestion
+    const originalCategory = rule?.category;
+    if (originalCategory && originalCategory !== tx.category) {
+      aiStatus = "override";
+      aiDetails["Regra original"] = tx.ruleId;
+      aiDetails["Sugestão da regra"] = originalCategory;
+      aiDetails["Cliente classificou como"] = tx.category;
+    } else {
+      aiStatus = "pass";
+      aiDetails["Fonte"] = `Regra ${tx.ruleId} (confirmada pelo cliente)`;
+      aiDetails["Categoria"] = tx.category;
+    }
     aiDetails["Confiança"] = `${tx.confidenceScore ?? 0}%`;
   } else if (tx.classifiedBy === "pending") {
     aiStatus = "pending";
     aiDetails["Resultado"] = "Sem sugestão — aguardando classificação";
   } else {
     aiStatus = "skip";
-    aiDetails["Resultado"] = "Sem correspondência em memória ou regras";
+    aiDetails["Resultado"] = "Classificado manualmente sem correspondência de regra";
   }
 
   const aiLayer: AuditLayerData = {
