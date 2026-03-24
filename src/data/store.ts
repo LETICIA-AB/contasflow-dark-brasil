@@ -184,6 +184,8 @@ function seedClients(): Client[] {
       cnpj: "34.567.890/0001-12",
       regime: "Lucro Real",
       bank: "Itaú Unibanco",
+      banks: ["Itaú Unibanco", "Banco do Brasil"],
+      chartOverrides: {},
       status: "approved",
       transactions: generateTransactions("c3"),
     },
