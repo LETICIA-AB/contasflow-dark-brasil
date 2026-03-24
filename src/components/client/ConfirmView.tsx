@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { CATEGORIES, type Client, type Transaction, loadClients, saveClients } from "@/data/store";
 import { resolveAccounts } from "@/data/chartOfAccounts";
-import { recordClassification } from "@/data/classificationRules";
+import { recordClassification, classifyTransaction } from "@/data/classificationRules";
 
 interface Props {
   client: Client;
