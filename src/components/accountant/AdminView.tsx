@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { type Client, type User, type Upload, loadUsers, saveUsers, loadUploads, loadClients, saveClients, formatCNPJ, CATEGORIES } from "@/data/store";
 import { loadBanks, saveBanks, addBank, type BankEntry } from "@/data/bankStore";
-import { CHART_OF_ACCOUNTS, CATEGORY_DEBIT_MAP, CATEGORY_CREDIT_MAP } from "@/data/chartOfAccounts";
+import { CHART_OF_ACCOUNTS, CATEGORY_DEBIT_MAP, CATEGORY_CREDIT_MAP, type Account } from "@/data/chartOfAccounts";
+import { getActiveChart, saveCustomChart, clearCustomChart } from "@/data/chartStore";
+import * as XLSX from "xlsx";
 
 interface Props {
   clients: Client[];
@@ -317,71 +319,320 @@ export default function AdminView({ clients, onUpdate }: Props) {
       )}
 
       {/* ── CHART OF ACCOUNTS PER CLIENT ── */}
-      {subTab === "chart" && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <label className="text-sm text-muted-foreground">Empresa:</label>
-            <select className="cf-select w-64" value={chartClientId} onChange={(e) => setChartClientId(e.target.value)}>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-          <p className="text-xs text-muted-foreground">Sobrescreva as contas contábeis padrão para esta empresa. Deixe em branco para usar o padrão.</p>
+      {subTab === "chart" && <ChartTab clients={clients} chartClientId={chartClientId} setChartClientId={setChartClientId} onUpdate={onUpdate} />}
+    </div>
+  );
+}
 
-          <div className="cf-card p-0 overflow-hidden">
-            <div className="overflow-x-auto">
+// ── Chart Tab Component ──
+function ChartTab({ clients, chartClientId, setChartClientId, onUpdate }: {
+  clients: Client[];
+  chartClientId: string;
+  setChartClientId: (id: string) => void;
+  onUpdate: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importPreview, setImportPreview] = useState<Account[] | null>(null);
+  const [importError, setImportError] = useState("");
+  const [activeChart, setActiveChart] = useState<Account[]>(getActiveChart);
+  const [importMode, setImportMode] = useState<"preview" | "done" | null>(null);
+
+  const chartClient = clients.find((c) => c.id === chartClientId);
+
+  const handleOverride = (category: string, field: "debit" | "credit", value: string) => {
+    const allClients = loadClients();
+    const c = allClients.find((cl) => cl.id === chartClientId);
+    if (!c) return;
+    if (!c.chartOverrides) c.chartOverrides = {};
+    if (!c.chartOverrides[category]) c.chartOverrides[category] = { debit: "", credit: "" };
+    c.chartOverrides[category][field] = value;
+    if (!c.chartOverrides[category].debit && !c.chartOverrides[category].credit) {
+      delete c.chartOverrides[category];
+    }
+    saveClients(allClients);
+    onUpdate();
+  };
+
+  const parseType = (val: string): "A" | "R" | "D" => {
+    const v = (val || "").toString().trim().toUpperCase();
+    if (v === "A" || v === "ATIVO" || v === "ASSET") return "A";
+    if (v === "R" || v === "RECEITA" || v === "REVENUE") return "R";
+    if (v === "D" || v === "DESPESA" || v === "EXPENSE") return "D";
+    return "D";
+  };
+
+  const handleFileImport = (file: File) => {
+    setImportError("");
+    setImportPreview(null);
+
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (!["csv", "xlsx", "xls"].includes(ext || "")) {
+      setImportError("Formato não suportado. Use CSV, XLS ou XLSX.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows: Record<string, string>[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+        if (rows.length === 0) {
+          setImportError("Arquivo vazio ou sem dados reconhecíveis.");
+          return;
+        }
+
+        // Auto-detect columns
+        const firstRow = rows[0];
+        const keys = Object.keys(firstRow);
+
+        const findCol = (patterns: string[]) =>
+          keys.find((k) => patterns.some((p) => k.toLowerCase().includes(p))) || "";
+
+        const codeCol = findCol(["codigo", "código", "code", "conta", "account"]) || keys[0];
+        const nameCol = findCol(["nome", "name", "descricao", "descrição", "description"]) || keys[1];
+        const typeCol = findCol(["tipo", "type", "natureza"]);
+        const groupCol = findCol(["grupo", "group", "classificacao", "classificação"]);
+
+        const accounts: Account[] = rows.map((row, i) => ({
+          code: String(row[codeCol] || "").trim(),
+          seq: i + 1,
+          name: String(row[nameCol] || "").trim(),
+          type: parseType(String(row[typeCol] || "D")),
+          group: String(row[groupCol] || "Importado").trim(),
+        })).filter((a) => a.code && a.name);
+
+        if (accounts.length === 0) {
+          setImportError(`Nenhuma conta válida encontrada. Colunas detectadas: ${keys.join(", ")}. Esperado: código, nome, tipo (A/R/D), grupo.`);
+          return;
+        }
+
+        setImportPreview(accounts);
+        setImportMode("preview");
+      } catch {
+        setImportError("Erro ao processar o arquivo. Verifique o formato.");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const confirmImport = () => {
+    if (!importPreview) return;
+    saveCustomChart(importPreview);
+    setActiveChart(importPreview);
+    setImportPreview(null);
+    setImportMode("done");
+    setTimeout(() => setImportMode(null), 3000);
+  };
+
+  const handleResetChart = () => {
+    if (!window.confirm("Restaurar o plano de contas padrão? Isso remove o plano importado.")) return;
+    clearCustomChart();
+    setActiveChart(CHART_OF_ACCOUNTS);
+  };
+
+  const isCustom = activeChart !== CHART_OF_ACCOUNTS && activeChart.length !== CHART_OF_ACCOUNTS.length;
+
+  return (
+    <div className="space-y-4">
+      {/* Import section */}
+      <div className="cf-card border-primary/30 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold">📥 Importar Plano de Contas</h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Importe um arquivo CSV ou Excel com as colunas: <span className="font-mono text-primary">código, nome, tipo (A/R/D), grupo</span>
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {isCustom && (
+              <button className="cf-btn-ghost text-xs text-cf-yellow" onClick={handleResetChart}>
+                ↩ Restaurar padrão
+              </button>
+            )}
+            <span className={`cf-badge ${isCustom ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground"}`}>
+              {activeChart.length} contas {isCustom ? "(importado)" : "(padrão)"}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex gap-3 flex-wrap items-center">
+          <button className="cf-btn-primary" onClick={() => fileRef.current?.click()}>
+            📁 Selecionar arquivo
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            className="hidden"
+            accept=".csv,.xlsx,.xls"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleFileImport(f);
+              e.target.value = "";
+            }}
+          />
+          <button
+            className="cf-btn-secondary text-xs"
+            onClick={() => {
+              const csv = "codigo,nome,tipo,grupo\n110001,Caixa Geral,A,Caixa e Bancos\n310001,Salários,D,Pessoal\n410001,Receita de Vendas,R,Receitas";
+              const blob = new Blob([csv], { type: "text/csv" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url; a.download = "modelo_plano_contas.csv"; a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            ⬇ Baixar modelo CSV
+          </button>
+        </div>
+
+        {importError && (
+          <div className="px-3 py-2 rounded-lg bg-cf-red/10 border border-cf-red/30">
+            <p className="text-cf-red text-sm">❌ {importError}</p>
+          </div>
+        )}
+
+        {/* Preview */}
+        {importPreview && importMode === "preview" && (
+          <div className="space-y-3">
+            <div className="px-3 py-2 rounded-lg bg-cf-blue/10 border border-cf-blue/30">
+              <p className="text-cf-blue text-sm font-medium">
+                📋 Preview: {importPreview.length} contas encontradas —
+                {" "}{importPreview.filter((a) => a.type === "A").length} Ativos,
+                {" "}{importPreview.filter((a) => a.type === "R").length} Receitas,
+                {" "}{importPreview.filter((a) => a.type === "D").length} Despesas
+              </p>
+            </div>
+            <div className="cf-card p-0 overflow-hidden max-h-64 overflow-y-auto">
               <table className="cf-table">
-                <thead>
-                  <tr>
-                    <th>Categoria</th>
-                    <th>Conta Débito (padrão)</th>
-                    <th>Conta Débito (empresa)</th>
-                    <th>Conta Crédito (padrão)</th>
-                    <th>Conta Crédito (empresa)</th>
-                  </tr>
-                </thead>
+                <thead><tr><th>Código</th><th>Nome</th><th>Tipo</th><th>Grupo</th></tr></thead>
                 <tbody>
-                  {CATEGORIES.map((cat) => {
-                    const defaultDebit = CATEGORY_DEBIT_MAP[cat] || "";
-                    const defaultCredit = CATEGORY_CREDIT_MAP[cat] || "";
-                    const override = chartClient?.chartOverrides?.[cat];
-                    return (
-                      <tr key={cat}>
-                        <td className="font-medium">{cat}</td>
-                        <td className="font-mono text-xs text-muted-foreground">{defaultDebit || "—"}</td>
-                        <td>
-                          <select
-                            className="cf-select py-1 px-2 text-xs"
-                            value={override?.debit || ""}
-                            onChange={(e) => handleOverride(cat, "debit", e.target.value)}
-                          >
-                            <option value="">Padrão</option>
-                            {CHART_OF_ACCOUNTS.filter((a) => a.type === "D" || a.type === "A").map((a) => (
-                              <option key={a.code} value={a.code}>{a.code} — {a.name}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="font-mono text-xs text-muted-foreground">{defaultCredit || "—"}</td>
-                        <td>
-                          <select
-                            className="cf-select py-1 px-2 text-xs"
-                            value={override?.credit || ""}
-                            onChange={(e) => handleOverride(cat, "credit", e.target.value)}
-                          >
-                            <option value="">Padrão</option>
-                            {CHART_OF_ACCOUNTS.filter((a) => a.type === "R" || a.type === "A").map((a) => (
-                              <option key={a.code} value={a.code}>{a.code} — {a.name}</option>
-                            ))}
-                          </select>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {importPreview.slice(0, 30).map((a, i) => (
+                    <tr key={i}>
+                      <td className="font-mono text-primary">{a.code}</td>
+                      <td className="font-medium">{a.name}</td>
+                      <td>
+                        <span className={`inline-block w-6 h-6 rounded text-xs font-bold leading-6 text-center ${
+                          a.type === "A" ? "bg-cf-blue/20 text-cf-blue" : a.type === "R" ? "bg-cf-green/20 text-cf-green" : "bg-cf-red/20 text-cf-red"
+                        }`}>{a.type}</span>
+                      </td>
+                      <td className="text-muted-foreground text-xs">{a.group}</td>
+                    </tr>
+                  ))}
+                  {importPreview.length > 30 && (
+                    <tr><td colSpan={4} className="text-center text-muted-foreground text-xs py-2">... e mais {importPreview.length - 30} contas</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>
+            <div className="flex gap-3">
+              <button className="cf-btn-primary" onClick={confirmImport}>
+                ✓ Confirmar importação ({importPreview.length} contas)
+              </button>
+              <button className="cf-btn-secondary" onClick={() => { setImportPreview(null); setImportMode(null); }}>Cancelar</button>
+            </div>
           </div>
+        )}
+
+        {importMode === "done" && (
+          <div className="px-3 py-2 rounded-lg bg-cf-green/10 border border-cf-green/30">
+            <p className="text-cf-green text-sm font-medium">✓ Plano de contas importado com sucesso!</p>
+          </div>
+        )}
+      </div>
+
+      {/* Overrides per client */}
+      <div className="flex items-center gap-3">
+        <label className="text-sm text-muted-foreground">Vincular por empresa:</label>
+        <select className="cf-select w-64" value={chartClientId} onChange={(e) => setChartClientId(e.target.value)}>
+          {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
+      <p className="text-xs text-muted-foreground">Sobrescreva as contas contábeis padrão para esta empresa. Deixe em branco para usar o padrão.</p>
+
+      <div className="cf-card p-0 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="cf-table">
+            <thead>
+              <tr>
+                <th>Categoria</th>
+                <th>Conta Débito (padrão)</th>
+                <th>Conta Débito (empresa)</th>
+                <th>Conta Crédito (padrão)</th>
+                <th>Conta Crédito (empresa)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {CATEGORIES.map((cat) => {
+                const defaultDebit = CATEGORY_DEBIT_MAP[cat] || "";
+                const defaultCredit = CATEGORY_CREDIT_MAP[cat] || "";
+                const override = chartClient?.chartOverrides?.[cat];
+                return (
+                  <tr key={cat}>
+                    <td className="font-medium">{cat}</td>
+                    <td className="font-mono text-xs text-muted-foreground">{defaultDebit || "—"}</td>
+                    <td>
+                      <select
+                        className="cf-select py-1 px-2 text-xs"
+                        value={override?.debit || ""}
+                        onChange={(e) => handleOverride(cat, "debit", e.target.value)}
+                      >
+                        <option value="">Padrão</option>
+                        {activeChart.filter((a) => a.type === "D" || a.type === "A").map((a) => (
+                          <option key={a.code} value={a.code}>{a.code} — {a.name}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="font-mono text-xs text-muted-foreground">{defaultCredit || "—"}</td>
+                    <td>
+                      <select
+                        className="cf-select py-1 px-2 text-xs"
+                        value={override?.credit || ""}
+                        onChange={(e) => handleOverride(cat, "credit", e.target.value)}
+                      >
+                        <option value="">Padrão</option>
+                        {activeChart.filter((a) => a.type === "R" || a.type === "A").map((a) => (
+                          <option key={a.code} value={a.code}>{a.code} — {a.name}</option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
+
+      {/* Full chart view */}
+      <div className="cf-card p-0 overflow-hidden">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+          <h3 className="font-semibold">Plano de Contas Ativo</h3>
+          <span className="text-xs text-muted-foreground">{activeChart.length} contas</span>
+        </div>
+        <div className="overflow-x-auto max-h-96 overflow-y-auto">
+          <table className="cf-table">
+            <thead><tr><th>Seq</th><th>Código</th><th>Nome</th><th>Tipo</th><th>Grupo</th></tr></thead>
+            <tbody>
+              {activeChart.map((a) => (
+                <tr key={a.code}>
+                  <td className="text-muted-foreground text-xs">{a.seq}</td>
+                  <td className="font-mono text-primary font-bold">{a.code}</td>
+                  <td className="font-medium">{a.name}</td>
+                  <td>
+                    <span className={`inline-block w-6 h-6 rounded text-xs font-bold leading-6 text-center ${
+                      a.type === "A" ? "bg-cf-blue/20 text-cf-blue" : a.type === "R" ? "bg-cf-green/20 text-cf-green" : "bg-cf-red/20 text-cf-red"
+                    }`}>{a.type}</span>
+                  </td>
+                  <td className="text-muted-foreground text-xs">{a.group}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
