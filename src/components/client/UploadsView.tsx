@@ -72,6 +72,27 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
       const updated = [...allUploads, ...newUploads];
       saveUploads(updated);
       setUploads(updated.filter((u) => u.clientId === client.id));
+
+      // Generate transactions for the client if none exist for this period
+      const allClients = loadClients();
+      const c = allClients.find((cl) => cl.id === client.id);
+      if (c) {
+        const periodTransactions = c.transactions.filter((t) => {
+          const monthMap: Record<string, string> = {
+            "Jan": "01", "Fev": "02", "Mar": "03", "Abr": "04", "Mai": "05", "Jun": "06",
+            "Jul": "07", "Ago": "08", "Set": "09", "Out": "10", "Nov": "11", "Dez": "12",
+          };
+          const [monthKey, year] = period.split("/");
+          const prefix = `${year}-${monthMap[monthKey]}`;
+          return t.date.startsWith(prefix);
+        });
+        if (periodTransactions.length === 0) {
+          const newTxs = generateGenericTransactions(client.id, client.bank, period);
+          c.transactions = [...c.transactions, ...newTxs];
+          saveClients(allClients);
+          onUpdate();
+        }
+      }
       setProcessing(false);
       if (onNavigate) {
         setTimeout(() => onNavigate("confirm"), 1000);
