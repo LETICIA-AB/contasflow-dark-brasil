@@ -179,6 +179,65 @@ function generateTransactions(clientId: string): Transaction[] {
   });
 }
 
+// Generic transaction generator for any client (used on upload)
+const GENERIC_DESCRIPTIONS: [string, number, string][] = [
+  ["PIX REC CLIENTE", 3500, "credit"],
+  ["TED RECEBIDA", 5200, "credit"],
+  ["VENDA CARTAO CREDITO", 8900, "credit"],
+  ["VENDA CARTAO DEBITO", 4100, "credit"],
+  ["BOLETO RECEBIDO", 2700, "credit"],
+  ["PGTO FOLHA", -15000, "debit"],
+  ["DAS SIMPLES NACIONAL", -2800, "debit"],
+  ["PGTO FORNECEDOR", -6500, "debit"],
+  ["ALUGUEL IMOVEL COMERCIAL", -5000, "debit"],
+  ["PGTO CONTA LUZ", -850, "debit"],
+  ["PGTO CONTA AGUA", -320, "debit"],
+  ["TARIFA BANCARIA MENSAL", -79.90, "debit"],
+  ["PGTO INTERNET/TELEFONE", -450, "debit"],
+  ["COMPRA MATERIAL ESCRITORIO", -280, "debit"],
+];
+
+export function generateGenericTransactions(clientId: string, bankName: string, period: string): Transaction[] {
+  // Convert period like "Mar/2026" to "2026-03"
+  const monthMap: Record<string, string> = {
+    "Jan": "01", "Fev": "02", "Mar": "03", "Abr": "04", "Mai": "05", "Jun": "06",
+    "Jul": "07", "Ago": "08", "Set": "09", "Out": "10", "Nov": "11", "Dez": "12",
+  };
+  const [monthKey, year] = period.split("/");
+  const monthNum = monthMap[monthKey] || "03";
+  const datePrefix = `${year}-${monthNum}`;
+
+  return GENERIC_DESCRIPTIONS.map((item, i) => {
+    const [desc, amt, type] = item;
+    const txType = type as "credit" | "debit";
+    const day = String(3 + (i * 2) % 26).padStart(2, "0");
+
+    const result = classifyTransaction(desc, txType);
+    const category = result.auto ? result.category : "";
+    let debitAccount = "";
+    let creditAccount = "";
+    if (result.auto) {
+      const accounts = resolveAccounts(result.category, txType, bankName);
+      debitAccount = accounts.debit;
+      creditAccount = accounts.credit;
+    }
+
+    return {
+      id: `${clientId}-t${Date.now()}-${i}`,
+      date: `${datePrefix}-${day}`,
+      description: desc,
+      amount: Math.abs(amt),
+      type: txType,
+      category,
+      classifiedBy: result.auto ? "auto" as const : "pending" as const,
+      ruleId: result.auto ? result.ruleId : undefined,
+      debitAccount,
+      creditAccount,
+      approved: false,
+    };
+  });
+}
+
 function seedClients(): Client[] {
   return [
     {
