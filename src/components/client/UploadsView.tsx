@@ -254,6 +254,16 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
         )}
       </div>
 
+      {parseError && (
+        <div className="cf-card px-4 py-3 bg-cf-red/10 border border-cf-red/30 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 text-cf-red shrink-0 mt-0.5" />
+          <div>
+            <p className="text-cf-red text-sm font-medium">{parseError}</p>
+            <p className="text-cf-red/70 text-xs mt-1">Formatos suportados: OFX (extrato bancário) e CSV com colunas de data, descrição e valor.</p>
+          </div>
+        </div>
+      )}
+
       {/* Classification progress + submit */}
       <div className="cf-card space-y-4">
         <h3 className="font-semibold">Progresso de Classificação</h3>
