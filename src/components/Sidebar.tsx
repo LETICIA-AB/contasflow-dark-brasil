@@ -110,8 +110,8 @@ export default function Sidebar({ session, client, activeView, onNavigate, onLog
                   : {}
               }
             >
-              <span className="text-base">{tab.icon}</span>
-              {tab.label}
+              <tab.icon className="w-4 h-4 shrink-0" />
+              <span>{tab.label}</span>
             </button>
           ))}
         </nav>
