@@ -3,6 +3,7 @@ import { type Client, type Transaction, type Upload, loadClients, saveClients, l
 import { addNotification } from "@/data/notificationStore";
 import { classifyTransaction } from "@/data/classificationRules";
 import { resolveAccounts } from "@/data/chartOfAccounts";
+import { findInMemory } from "@/data/memoryStore";
 import { parseOFX, parseCSV, parsePDF } from "@/data/fileParser";
 import { CheckCircle2, AlertTriangle, Lock, FolderUp, Clock, ChevronDown, ChevronRight } from "lucide-react";
 
