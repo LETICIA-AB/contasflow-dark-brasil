@@ -176,12 +176,9 @@ function splitCSVLine(line: string, sep: string): string[] {
  * show a user-facing error.
  */
 export async function parsePDF(buffer: ArrayBuffer): Promise<ParsedTransaction[]> {
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-expect-error dynamic CDN import for PDF.js
+  const cdnUrl = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs";
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pdfjsLib: any = await import(
-    /* @vite-ignore */ "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs"
-  );
+  const pdfjsLib: any = await (Function("url", "return import(url)")(cdnUrl));
 
   pdfjsLib.GlobalWorkerOptions.workerSrc =
     "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
