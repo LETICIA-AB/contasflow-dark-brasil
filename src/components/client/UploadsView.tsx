@@ -3,6 +3,7 @@ import { type Client, type Transaction, type Upload, loadClients, saveClients, l
 import { addNotification } from "@/data/notificationStore";
 import { classifyTransaction } from "@/data/classificationRules";
 import { resolveAccounts } from "@/data/chartOfAccounts";
+import { findInMemory } from "@/data/memoryStore";
 import { parseOFX, parseCSV, parsePDF } from "@/data/fileParser";
 import { CheckCircle2, AlertTriangle, Lock, FolderUp, Clock, ChevronDown, ChevronRight } from "lucide-react";
 
@@ -134,6 +135,24 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
       if (c) {
         if (allParsed.length > 0) {
           const newTxs: Transaction[] = allParsed.map((p, i) => {
+            // 1. Check memory first
+            const mem = findInMemory(p.description, client.id);
+            if (mem) {
+              return {
+                id: `${client.id}-t${Date.now()}-${i}`,
+                date: p.date,
+                description: p.description,
+                amount: p.amount,
+                type: p.type,
+                category: mem.category,
+                classifiedBy: "memory" as const,
+                debitAccount: mem.debitAccount,
+                creditAccount: mem.creditAccount,
+                clientDescription: mem.clientDescription,
+                approved: false,
+              };
+            }
+            // 2. Check regex rules
             const result = classifyTransaction(p.description, p.type);
             const category = result.auto ? result.category : "";
             let debitAccount = "";
