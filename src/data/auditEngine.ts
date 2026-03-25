@@ -117,7 +117,7 @@ export function buildAuditLayers(tx: Transaction): AuditLayerData[] {
     clientDetails["Categoria informada"] = tx.category;
     if (tx.clientDescription) clientDetails["Descrição"] = tx.clientDescription;
     clientDetails["Status"] = "Classificado pelo cliente";
-  } else if (tx.clientDescription && tx.classifiedBy !== "client") {
+  } else if (tx.clientDescription) {
     clientStatus = "pass";
     clientDetails["Descrição"] = tx.clientDescription;
     clientDetails["Status"] = "Descrição livre fornecida";

@@ -177,6 +177,7 @@ function splitCSVLine(line: string, sep: string): string[] {
  */
 export async function parsePDF(buffer: ArrayBuffer): Promise<ParsedTransaction[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // @ts-ignore - dynamic CDN import for PDF.js
   const pdfjsLib = (await import(
     /* @vite-ignore */ "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs"
   )) as any;
