@@ -132,20 +132,29 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
 
       for (const { file, content, buffer } of results) {
         const ext = file.name.toLowerCase().split(".").pop() || "";
+        console.log(`[Upload] Processing ${file.name} (ext=${ext}, contentLen=${content.length}, hasBuffer=${!!buffer})`);
         if (ext === "pdf") {
           if (!buffer) continue;
           try {
             const parsed = await parsePDF(buffer);
+            console.log(`[Upload] PDF parsed: ${parsed.length} transactions`);
             allParsed = [...allParsed, ...parsed];
-          } catch {
+          } catch (err) {
+            console.error("[Upload] PDF parse error:", err);
             pdfError = true;
           }
         } else {
-          if (!content) continue;
+          if (!content) { console.log("[Upload] Empty content, skipping"); continue; }
+          // Log first 200 chars for debugging
+          console.log(`[Upload] Content preview: ${content.substring(0, 200)}`);
           if (ext === "ofx") {
-            allParsed = [...allParsed, ...parseOFX(content)];
+            const parsed = parseOFX(content);
+            console.log(`[Upload] OFX parsed: ${parsed.length} transactions`);
+            allParsed = [...allParsed, ...parsed];
           } else if (ext === "csv" || ext === "txt") {
-            allParsed = [...allParsed, ...parseCSV(content)];
+            const parsed = parseCSV(content);
+            console.log(`[Upload] CSV parsed: ${parsed.length} transactions`);
+            allParsed = [...allParsed, ...parsed];
           }
         }
       }
