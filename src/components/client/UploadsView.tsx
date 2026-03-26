@@ -72,20 +72,40 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
 
     const fileArray = Array.from(files);
 
-    // PDFs must be read as ArrayBuffer for PDF.js; all others as text
+    // PDFs → ArrayBuffer; text files → try multiple encodings
     const readers: Promise<{ file: File; content: string; buffer?: ArrayBuffer }>[] = fileArray.map(
       (f) => {
         const ext = f.name.toLowerCase().split(".").pop() || "";
         return new Promise((resolve) => {
-          const reader = new FileReader();
           if (ext === "pdf") {
+            const reader = new FileReader();
             reader.onload = () => resolve({ file: f, content: "", buffer: reader.result as ArrayBuffer });
             reader.onerror = () => resolve({ file: f, content: "" });
             reader.readAsArrayBuffer(f);
           } else {
-            reader.onload = () => resolve({ file: f, content: reader.result as string });
-            reader.onerror = () => resolve({ file: f, content: "" });
-            reader.readAsText(f);
+            // Try UTF-8 first, then ISO-8859-1 (common for Brazilian bank files)
+            const tryRead = (encoding: string): Promise<string> =>
+              new Promise((res) => {
+                const r = new FileReader();
+                r.onload = () => res(r.result as string);
+                r.onerror = () => res("");
+                r.readAsText(f, encoding);
+              });
+
+            tryRead("UTF-8").then((utf8Content) => {
+              // If UTF-8 produced replacement chars, try Latin-1
+              if (utf8Content.includes("\uFFFD") || utf8Content.includes("ï»¿")) {
+                tryRead("ISO-8859-1").then((latinContent) => {
+                  console.log(`[Upload] Re-read ${f.name} as ISO-8859-1 (${latinContent.length} chars)`);
+                  resolve({ file: f, content: latinContent });
+                });
+              } else {
+                // Remove BOM if present
+                const content = utf8Content.replace(/^\uFEFF/, "");
+                console.log(`[Upload] Read ${f.name} as UTF-8 (${content.length} chars)`);
+                resolve({ file: f, content });
+              }
+            });
           }
         });
       }
