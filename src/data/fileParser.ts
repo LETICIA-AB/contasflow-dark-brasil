@@ -13,8 +13,13 @@ export interface ParsedTransaction {
  */
 export function parseOFX(content: string): ParsedTransaction[] {
   const transactions: ParsedTransaction[] = [];
+
+  // Some OFX files use \r\n or \r — normalize
+  const normalized = content.replace(/\r\n?/g, "\n");
+
   // Split by STMTTRN blocks
-  const blocks = content.split(/<STMTTRN>/i).slice(1);
+  const blocks = normalized.split(/<STMTTRN>/i).slice(1);
+  console.log(`[parseOFX] Found ${blocks.length} STMTTRN blocks`);
 
   for (const block of blocks) {
     const endIdx = block.search(/<\/STMTTRN>/i);
@@ -33,12 +38,16 @@ export function parseOFX(content: string): ParsedTransaction[] {
     const rawAmount = getTag("TRNAMT");
     const memo = getTag("MEMO") || getTag("NAME") || getTag("FITID");
 
-    if (!rawDate || !rawAmount) continue;
+    if (!rawDate || !rawAmount) {
+      console.log(`[parseOFX] Skipping block: date=${rawDate}, amount=${rawAmount}`);
+      continue;
+    }
 
-    // Parse date: YYYYMMDD or YYYYMMDDHHMMSS
-    const year = rawDate.substring(0, 4);
-    const month = rawDate.substring(4, 6);
-    const day = rawDate.substring(6, 8);
+    // Parse date: YYYYMMDD or YYYYMMDDHHMMSS or YYYYMMDDHHMMSS[offset]
+    const dateStr = rawDate.replace(/\[.*$/, ""); // remove timezone offset
+    const year = dateStr.substring(0, 4);
+    const month = dateStr.substring(4, 6);
+    const day = dateStr.substring(6, 8);
     const date = `${year}-${month}-${day}`;
 
     const amount = parseFloat(rawAmount.replace(",", "."));
@@ -52,29 +61,62 @@ export function parseOFX(content: string): ParsedTransaction[] {
     });
   }
 
+  console.log(`[parseOFX] Parsed ${transactions.length} transactions`);
   return transactions;
 }
 
 /**
  * Parse CSV bank statement files.
  * Uses heuristics to detect date, description, and amount columns.
+ * Supports Brazilian bank formats (Itaú, Bradesco, Nubank, Inter, Sicoob, etc.)
  */
 export function parseCSV(content: string, separator?: string): ParsedTransaction[] {
-  const lines = content.split(/\r?\n/).filter((l) => l.trim());
-  if (lines.length < 2) return [];
+  // Normalize line endings
+  const normalized = content.replace(/\r\n?/g, "\n");
+  const lines = normalized.split("\n").filter((l) => l.trim());
+  if (lines.length < 2) {
+    console.log("[parseCSV] Less than 2 lines, aborting");
+    return [];
+  }
 
   // Detect separator
   const sep = separator || detectSeparator(lines[0]);
+  console.log(`[parseCSV] Detected separator: "${sep === "\t" ? "TAB" : sep}"`);
+
   const header = lines[0].split(sep).map((h) => h.trim().replace(/^"|"$/g, "").toLowerCase());
+  console.log("[parseCSV] Headers:", header);
 
-  // Find columns by heuristic
-  const dateCol = findColumn(header, ["data", "date", "dt", "data lancamento", "data lançamento", "data mov", "data movimentação"]);
-  const descCol = findColumn(header, ["descricao", "descrição", "historico", "histórico", "description", "memo", "lancamento", "lançamento", "detalhe"]);
-  const amountCol = findColumn(header, ["valor", "amount", "value", "vlr", "montante"]);
-  const creditCol = findColumn(header, ["credito", "crédito", "credit", "entrada"]);
-  const debitCol = findColumn(header, ["debito", "débito", "debit", "saida", "saída"]);
+  // Find columns by heuristic — expanded list for Brazilian banks
+  const dateCol = findColumn(header, [
+    "data", "date", "dt", "data lancamento", "data lançamento", "data mov",
+    "data movimentação", "data movimentacao", "data transação", "data transacao",
+    "data operação", "data operacao", "data do lançamento", "data do lancamento",
+    "data da transação", "data da transacao", "data pagamento",
+  ]);
+  const descCol = findColumn(header, [
+    "descricao", "descrição", "historico", "histórico", "description", "memo",
+    "lancamento", "lançamento", "detalhe", "detalhes", "identificação",
+    "identificacao", "titulo", "título", "informações", "informacoes",
+    "nome", "estabelecimento", "favorecido",
+  ]);
+  const amountCol = findColumn(header, [
+    "valor", "amount", "value", "vlr", "montante", "quantia", "total",
+  ]);
+  const creditCol = findColumn(header, [
+    "credito", "crédito", "credit", "entrada", "receita",
+  ]);
+  const debitCol = findColumn(header, [
+    "debito", "débito", "debit", "saida", "saída", "despesa",
+  ]);
 
-  if (dateCol === -1 || descCol === -1) return [];
+  console.log(`[parseCSV] Columns: date=${dateCol}, desc=${descCol}, amount=${amountCol}, credit=${creditCol}, debit=${debitCol}`);
+
+  // If we can't find columns by header, try positional heuristic
+  // Many Brazilian CSVs: Date;Description;Amount or Date;Description;Debit;Credit
+  if (dateCol === -1 || descCol === -1) {
+    console.log("[parseCSV] Header heuristic failed, trying positional parsing");
+    return parseCSVPositional(lines, sep);
+  }
 
   const transactions: ParsedTransaction[] = [];
 
@@ -109,6 +151,56 @@ export function parseCSV(content: string, separator?: string): ParsedTransaction
     transactions.push({ date, description, amount, type });
   }
 
+  console.log(`[parseCSV] Parsed ${transactions.length} transactions`);
+  return transactions;
+}
+
+/**
+ * Positional CSV parser — tries to find date and amount in each row
+ * without relying on headers. Works for many Brazilian bank exports.
+ */
+function parseCSVPositional(lines: string[], sep: string): ParsedTransaction[] {
+  const transactions: ParsedTransaction[] = [];
+  // Skip first line (likely header)
+  for (let i = 1; i < lines.length; i++) {
+    const cols = splitCSVLine(lines[i], sep);
+    if (cols.length < 2) continue;
+
+    // Find the first column that looks like a date
+    let dateIdx = -1;
+    let dateVal = "";
+    for (let c = 0; c < Math.min(cols.length, 3); c++) {
+      const d = parseDate(clean(cols[c]));
+      if (d) { dateIdx = c; dateVal = d; break; }
+    }
+    if (dateIdx < 0) continue;
+
+    // Find amount — last numeric-looking column
+    let amountIdx = -1;
+    let amountVal = 0;
+    for (let c = cols.length - 1; c > dateIdx; c--) {
+      const val = parseAmount(cols[c]);
+      if (val !== 0) { amountIdx = c; amountVal = val; break; }
+    }
+    if (amountIdx < 0) continue;
+
+    // Description is everything between date and amount columns
+    const descParts: string[] = [];
+    for (let c = dateIdx + 1; c < amountIdx; c++) {
+      const v = clean(cols[c]);
+      if (v) descParts.push(v);
+    }
+    const description = descParts.join(" ").trim() || "Sem descrição";
+
+    transactions.push({
+      date: dateVal,
+      description,
+      amount: Math.abs(amountVal),
+      type: amountVal >= 0 ? "credit" : "debit",
+    });
+  }
+
+  console.log(`[parseCSV positional] Parsed ${transactions.length} transactions`);
   return transactions;
 }
 
@@ -135,20 +227,37 @@ function clean(val: string): string {
 }
 
 function parseAmount(raw: string): number {
-  const cleaned = clean(raw)
-    .replace(/[R$\s]/g, "")
-    .replace(/\./g, "")   // remove thousand separators
-    .replace(",", ".");    // decimal comma → dot
+  let cleaned = clean(raw).replace(/[R$\s]/g, "");
+  if (!cleaned) return 0;
+
+  // Detect format: if has both . and , the last one is the decimal separator
+  const lastDot = cleaned.lastIndexOf(".");
+  const lastComma = cleaned.lastIndexOf(",");
+
+  if (lastComma > lastDot) {
+    // Brazilian: 1.234,56 → remove dots, comma → dot
+    cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+  } else if (lastDot > lastComma) {
+    // US/international: 1,234.56 → remove commas
+    cleaned = cleaned.replace(/,/g, "");
+  } else {
+    // Only one separator or none
+    cleaned = cleaned.replace(",", ".");
+  }
+
   return parseFloat(cleaned) || 0;
 }
 
 function parseDate(raw: string): string | null {
-  // DD/MM/YYYY or DD-MM-YYYY
+  // DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
   const brMatch = raw.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
   if (brMatch) return `${brMatch[3]}-${brMatch[2].padStart(2, "0")}-${brMatch[1].padStart(2, "0")}`;
   // YYYY-MM-DD
   const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (isoMatch) return raw;
+  // YYYY/MM/DD
+  const isoSlash = raw.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+  if (isoSlash) return `${isoSlash[1]}-${isoSlash[2]}-${isoSlash[3]}`;
   return null;
 }
 
@@ -169,11 +278,6 @@ function splitCSVLine(line: string, sep: string): string[] {
 
 /**
  * Parse a PDF bank statement using PDF.js loaded from CDN at runtime.
- * Extracts text content from all pages, groups items into visual lines,
- * then applies Brazilian bank statement heuristics to find transactions.
- *
- * Throws if PDF.js cannot be loaded (no network) — caller should catch and
- * show a user-facing error.
  */
 export async function parsePDF(buffer: ArrayBuffer): Promise<ParsedTransaction[]> {
   const cdnUrl = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs";
@@ -191,7 +295,6 @@ export async function parsePDF(buffer: ArrayBuffer): Promise<ParsedTransaction[]
     const page = await pdf.getPage(pageNum);
     const textContent = await page.getTextContent();
 
-    // Group text items into visual rows by Y coordinate proximity (±3 units)
     const rows: Array<{ y: number; texts: { x: number; str: string }[] }> = [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const item of textContent.items as any[]) {
@@ -206,29 +309,26 @@ export async function parsePDF(buffer: ArrayBuffer): Promise<ParsedTransaction[]
       }
     }
 
-    // Sort rows top-to-bottom (PDF Y=0 is bottom-left, so descending Y = top first)
     rows.sort((a, b) => b.y - a.y);
 
     for (const row of rows) {
-      // Sort text items left-to-right within each line
       row.texts.sort((a, b) => a.x - b.x);
       const lineText = row.texts.map((t) => t.str).join(" ").trim();
       if (lineText) allLines.push(lineText);
     }
   }
 
+  console.log(`[parsePDF] Extracted ${allLines.length} text lines from ${pdf.numPages} pages`);
   return parsePDFLines(allLines);
 }
 
 /**
- * Parse text lines extracted from a PDF to find Brazilian bank statement
- * transactions. Handles Stone, Nubank, Itaú, Bradesco, Sicoob and others.
+ * Parse text lines extracted from a PDF to find Brazilian bank statement transactions.
  */
 function parsePDFLines(lines: string[]): ParsedTransaction[] {
   const DATE_RE = /(\d{2}\/\d{2}\/\d{4})/;
   const AMOUNT_RE = /([+-]?\s*R?\$?\s*\d{1,3}(?:\.\d{3})*,\d{2})/;
 
-  // Keywords to infer type when no explicit +/- sign is present
   const CREDIT_KW = ["recebido", "recebida", "depósito", "deposito", "entrada", "crédito", "credito", "reembolso", "devolução", "devolucao", "rendimento", "cashback", "pix recebido", "ted recebida"];
   const DEBIT_KW  = ["pagamento", "enviado", "enviada", "saque", "débito", "debito", "taxa", "tarifa", "mensalidade", "cobrança", "cobranca", "pix enviado", "ted enviada", "transferência enviada"];
 
@@ -241,11 +341,9 @@ function parsePDFLines(lines: string[]): ParsedTransaction[] {
     const amountMatch = AMOUNT_RE.exec(line);
     if (!amountMatch) continue;
 
-    // Parse date DD/MM/YYYY → YYYY-MM-DD
     const parts = dateMatch[1].split("/");
     const date = `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
 
-    // Parse amount — strip whitespace inside the match first
     const rawAmt = amountMatch[1].replace(/\s/g, "");
     const hasPlus  = rawAmt.startsWith("+");
     const hasMinus = rawAmt.startsWith("-");
@@ -254,7 +352,6 @@ function parsePDFLines(lines: string[]): ParsedTransaction[] {
     );
     if (isNaN(absAmt) || absAmt === 0) continue;
 
-    // Description: text between end-of-date and start-of-amount
     const dateEnd  = dateMatch.index + dateMatch[0].length;
     const amtStart = line.indexOf(amountMatch[0], dateEnd);
     const rawDesc  = amtStart > dateEnd
@@ -262,7 +359,6 @@ function parsePDFLines(lines: string[]): ParsedTransaction[] {
       : line.substring(dateEnd);
     const description = rawDesc.trim().replace(/\s+/g, " ") || "Sem descrição";
 
-    // Determine credit / debit
     let type: "credit" | "debit";
     if (hasPlus) {
       type = "credit";
@@ -275,12 +371,13 @@ function parsePDFLines(lines: string[]): ParsedTransaction[] {
       } else if (DEBIT_KW.some((kw) => lower.includes(kw))) {
         type = "debit";
       } else {
-        type = "debit"; // safe default
+        type = "debit";
       }
     }
 
     transactions.push({ date, description, amount: absAmt, type });
   }
 
+  console.log(`[parsePDF] Parsed ${transactions.length} transactions from PDF lines`);
   return transactions;
 }
