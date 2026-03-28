@@ -36,6 +36,7 @@ export function parseOFX(content: string): ParsedTransaction[] {
 
     const rawDate = getTag("DTPOSTED");
     const rawAmount = getTag("TRNAMT");
+    const trnType = getTag("TRNTYPE").toUpperCase();
     const memo = getTag("MEMO") || getTag("NAME") || getTag("FITID");
 
     if (!rawDate || !rawAmount) {
