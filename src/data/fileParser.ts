@@ -54,11 +54,21 @@ export function parseOFX(content: string): ParsedTransaction[] {
     const amount = parseFloat(rawAmount.replace(",", "."));
     if (isNaN(amount)) continue;
 
+    // Determine type: prefer TRNTYPE tag, fallback to amount sign
+    let txType: "credit" | "debit";
+    if (trnType === "CREDIT" || trnType === "DEP" || trnType === "INT" || trnType === "DIV") {
+      txType = "credit";
+    } else if (trnType === "DEBIT" || trnType === "CHECK" || trnType === "FEE" || trnType === "SRVCHG" || trnType === "PAYMENT") {
+      txType = "debit";
+    } else {
+      txType = amount >= 0 ? "credit" : "debit";
+    }
+
     transactions.push({
       date,
       description: memo || "Sem descrição",
       amount: Math.abs(amount),
-      type: amount >= 0 ? "credit" : "debit",
+      type: txType,
     });
   }
 
