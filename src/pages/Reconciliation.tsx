@@ -119,9 +119,11 @@ function extractStoneData(lines: string[]): { info: BankInfo; transactions: Tran
     let m;
     const amountRe = /(-?\s*R?\$?\s*[\d.]+,\d{2})/g;
     while ((m = amountRe.exec(rest)) !== null) {
-      const raw = m[1].replace(/\s/g, "").replace(/R\$/g, "");
+      let raw = m[1].replace(/\s/g, "").replace(/R\$/g, "");
+      const isNeg = raw.startsWith("-");
+      raw = raw.replace(/^[+-]/, "");
       const val = parseFloat(raw.replace(/\./g, "").replace(",", "."));
-      if (!isNaN(val)) amounts.push(val);
+      if (!isNaN(val)) amounts.push(isNeg ? -val : val);
     }
 
     if (amounts.length < 1) continue;
@@ -202,8 +204,21 @@ function parseManualText(text: string): Transaction[] {
 }
 
 function parseManualAmount(raw: string): number {
-  const cleaned = raw.replace(/[R$\s]/g, "").replace(/\./g, "").replace(",", ".");
-  return parseFloat(cleaned) || 0;
+  let cleaned = raw.trim().replace(/[R$\s]/g, "");
+  const isNegative = cleaned.startsWith("-");
+  cleaned = cleaned.replace(/^[+-]/, "");
+  // Handle Brazilian format: 1.500,00 → 1500.00
+  const lastComma = cleaned.lastIndexOf(",");
+  const lastDot = cleaned.lastIndexOf(".");
+  if (lastComma > lastDot) {
+    cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+  } else if (lastDot > lastComma) {
+    cleaned = cleaned.replace(/,/g, "");
+  } else {
+    cleaned = cleaned.replace(",", ".");
+  }
+  const val = parseFloat(cleaned) || 0;
+  return isNegative ? -val : val;
 }
 
 // ── Export to text file ────────────────────────────────────────────────
