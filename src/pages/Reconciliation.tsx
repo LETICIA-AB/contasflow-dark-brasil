@@ -103,9 +103,8 @@ function extractStoneData(lines: string[]): { info: BankInfo; transactions: Tran
   const periodMatch = fullText.match(/(?:Período|Periodo)[:\s]*(\d{2}\/\d{2}\/\d{4})\s*(?:a|até|-)\s*(\d{2}\/\d{2}\/\d{4})/i);
   if (periodMatch) info.period = `${periodMatch[1]} a ${periodMatch[2]}`;
 
-  // Parse transaction lines — look for lines starting with date DD/MM/YYYY or DD/MM/YY
-  const DATE_RE = /^(\d{2}\/\d{2}\/\d{2,4})/;
-  const AMOUNT_RE = /(-?\s*R?\$?\s*[\d.]+,\d{2})/g;
+  // Parse transaction lines — Stone format: DATE TIPO DESCRIÇÃO VALOR SALDO CONTRAPARTE
+  const DATE_RE = /^(\d{2}\/\d{2}\/\d{2,4})\s+/;
 
   for (const line of lines) {
     const dateMatch = DATE_RE.exec(line);
@@ -116,38 +115,50 @@ function extractStoneData(lines: string[]): { info: BankInfo; transactions: Tran
     let yr = dateParts[2];
     if (yr.length === 2) yr = (parseInt(yr) > 50 ? "19" : "20") + yr;
     const date = `${dateParts[0]}/${dateParts[1]}/${yr}`;
-    const rest = line.substring(dateMatch[0].length).trim();
 
-    // Find all amounts in the line
-    const amounts: number[] = [];
-    let m;
-    const amountRe = /(-\s*)?R?\$?\s*([\d.]+,\d{2})/g;
-    while ((m = amountRe.exec(rest)) !== null) {
+    const rest = line.substring(dateMatch[0].length);
+
+    // Detect TIPO: "Entrada" or "Saída"
+    const tipoMatch = rest.match(/^(Entrada|Sa[ií]da)\s+/i);
+    if (!tipoMatch) continue;
+
+    const tipo = tipoMatch[1];
+    const afterTipo = rest.substring(tipoMatch[0].length);
+
+    // Find all monetary values
+    const moneyParts: { value: number; index: number; length: number }[] = [];
+    const moneyRe = /(-\s*)?R?\$?\s*([\d]+(?:\.[\d]{3})*,\d{2})/g;
+    let m: RegExpExecArray | null;
+    while ((m = moneyRe.exec(afterTipo)) !== null) {
       const isNeg = !!(m[1] && m[1].trim() === "-");
-      const numPart = m[2];
-      const val = parseFloat(numPart.replace(/\./g, "").replace(",", "."));
-      if (!isNaN(val)) amounts.push(isNeg ? -val : val);
+      const val = parseFloat(m[2].replace(/\./g, "").replace(",", "."));
+      if (!isNaN(val)) {
+        moneyParts.push({ value: isNeg ? -val : val, index: m.index, length: m[0].length });
+      }
     }
 
-    if (amounts.length < 1) continue;
+    if (moneyParts.length === 0) continue;
 
-    // Remove amounts from text to get description parts
-    const textPart = rest.replace(/(-\s*)?R?\$?\s*[\d.]+,\d{2}/g, "|||").trim();
-    const parts = textPart.split("|||").map(s => s.trim()).filter(Boolean);
+    // Description = text before first monetary value
+    const descEnd = moneyParts[0].index;
+    const description = afterTipo.substring(0, descEnd).trim();
 
-    // Heuristic: first text part = type, rest = description + counterpart
-    const type = parts[0] || "Outros";
-    const description = parts.length > 1 ? parts[1] : parts[0] || "";
-    const counterpart = parts.length > 2 ? parts.slice(2).join(" ") : "";
+    // Contraparte = text after last monetary value, cleaned
+    const lastMoney = moneyParts[moneyParts.length - 1];
+    const afterLastMoney = afterTipo.substring(lastMoney.index + lastMoney.length).trim();
+    const counterpart = afterLastMoney
+      .replace(/STONE\s+INSTITUI[ÇC][ÃA]O.*$/i, "")
+      .replace(/Ag:\s*\d+.*$/i, "")
+      .trim();
 
-    const amount = amounts[0];
-    const balance = amounts.length > 1 ? amounts[1] : 0;
+    const amount = moneyParts[0].value;
+    const balance = moneyParts.length > 1 ? moneyParts[1].value : 0;
 
     transactions.push({
       id: `tx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       date,
-      type,
-      description: description || type,
+      type: tipo,
+      description: description || tipo,
       amount,
       balance,
       counterpart,
