@@ -337,7 +337,7 @@ export async function parsePDF(buffer: ArrayBuffer): Promise<ParsedTransaction[]
  * Parse text lines extracted from a PDF to find Brazilian bank statement transactions.
  */
 function parsePDFLines(lines: string[]): ParsedTransaction[] {
-  const DATE_RE = /(\d{2}\/\d{2}\/\d{4})/;
+  const DATE_RE = /(\d{2}\/\d{2}\/\d{2,4})/;
   const AMOUNT_RE = /([+-]?\s*R?\$?\s*\d{1,3}(?:\.\d{3})*,\d{2})/;
 
   const CREDIT_KW = ["recebido", "recebida", "depósito", "deposito", "entrada", "crédito", "credito", "reembolso", "devolução", "devolucao", "rendimento", "cashback", "pix recebido", "ted recebida"];
@@ -353,7 +353,9 @@ function parsePDFLines(lines: string[]): ParsedTransaction[] {
     if (!amountMatch) continue;
 
     const parts = dateMatch[1].split("/");
-    const date = `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+    let year = parts[2];
+    if (year.length === 2) year = (parseInt(year) > 50 ? "19" : "20") + year;
+    const date = `${year}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
 
     const rawAmt = amountMatch[1].replace(/\s/g, "");
     const hasPlus  = rawAmt.startsWith("+");

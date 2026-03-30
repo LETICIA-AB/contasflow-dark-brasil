@@ -103,33 +103,36 @@ function extractStoneData(lines: string[]): { info: BankInfo; transactions: Tran
   const periodMatch = fullText.match(/(?:Período|Periodo)[:\s]*(\d{2}\/\d{2}\/\d{4})\s*(?:a|até|-)\s*(\d{2}\/\d{2}\/\d{4})/i);
   if (periodMatch) info.period = `${periodMatch[1]} a ${periodMatch[2]}`;
 
-  // Parse transaction lines — look for lines starting with date DD/MM/YYYY
-  const DATE_RE = /^(\d{2}\/\d{2}\/\d{4})/;
+  // Parse transaction lines — look for lines starting with date DD/MM/YYYY or DD/MM/YY
+  const DATE_RE = /^(\d{2}\/\d{2}\/\d{2,4})/;
   const AMOUNT_RE = /(-?\s*R?\$?\s*[\d.]+,\d{2})/g;
 
   for (const line of lines) {
     const dateMatch = DATE_RE.exec(line);
     if (!dateMatch) continue;
 
-    const date = dateMatch[1];
+    // Normalize 2-digit year to 4-digit
+    const dateParts = dateMatch[1].split("/");
+    let yr = dateParts[2];
+    if (yr.length === 2) yr = (parseInt(yr) > 50 ? "19" : "20") + yr;
+    const date = `${dateParts[0]}/${dateParts[1]}/${yr}`;
     const rest = line.substring(dateMatch[0].length).trim();
 
     // Find all amounts in the line
     const amounts: number[] = [];
     let m;
-    const amountRe = /(-?\s*R?\$?\s*[\d.]+,\d{2})/g;
+    const amountRe = /(-\s*)?R?\$?\s*([\d.]+,\d{2})/g;
     while ((m = amountRe.exec(rest)) !== null) {
-      let raw = m[1].replace(/\s/g, "").replace(/R\$/g, "");
-      const isNeg = raw.startsWith("-");
-      raw = raw.replace(/^[+-]/, "");
-      const val = parseFloat(raw.replace(/\./g, "").replace(",", "."));
+      const isNeg = !!(m[1] && m[1].trim() === "-");
+      const numPart = m[2];
+      const val = parseFloat(numPart.replace(/\./g, "").replace(",", "."));
       if (!isNaN(val)) amounts.push(isNeg ? -val : val);
     }
 
     if (amounts.length < 1) continue;
 
     // Remove amounts from text to get description parts
-    const textPart = rest.replace(/(-?\s*R?\$?\s*[\d.]+,\d{2})/g, "|||").trim();
+    const textPart = rest.replace(/(-\s*)?R?\$?\s*[\d.]+,\d{2}/g, "|||").trim();
     const parts = textPart.split("|||").map(s => s.trim()).filter(Boolean);
 
     // Heuristic: first text part = type, rest = description + counterpart
@@ -166,7 +169,7 @@ function parseManualText(text: string): Transaction[] {
   for (const line of lines) {
     // Try pipe-separated: 01/01/2026 | Tipo | Desc | 5.000,00 | 15.000,00 | Contraparte
     const pipeParts = line.split("|").map(s => s.trim());
-    if (pipeParts.length >= 4 && /\d{2}\/\d{2}\/\d{4}/.test(pipeParts[0])) {
+    if (pipeParts.length >= 4 && /\d{2}\/\d{2}\/\d{2,4}/.test(pipeParts[0])) {
       const amount = parseManualAmount(pipeParts[3]);
       const balance = pipeParts.length > 4 ? parseManualAmount(pipeParts[4]) : 0;
       transactions.push({
@@ -184,7 +187,7 @@ function parseManualText(text: string): Transaction[] {
 
     // Try tab-separated
     const tabParts = line.split("\t").map(s => s.trim());
-    if (tabParts.length >= 4 && /\d{2}\/\d{2}\/\d{4}/.test(tabParts[0])) {
+    if (tabParts.length >= 4 && /\d{2}\/\d{2}\/\d{2,4}/.test(tabParts[0])) {
       const amount = parseManualAmount(tabParts[3]);
       const balance = tabParts.length > 4 ? parseManualAmount(tabParts[4]) : 0;
       transactions.push({

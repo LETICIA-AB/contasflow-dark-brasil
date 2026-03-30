@@ -163,7 +163,20 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
       const c = allClients.find((cl) => cl.id === client.id);
       if (c) {
         if (allParsed.length > 0) {
-          const newTxs: Transaction[] = allParsed.map((p, i) => {
+          // Deduplication: build hash set of existing transactions
+          const existingHashes = new Set(
+            c.transactions.map(t => `${t.date}|${t.description}|${t.amount}|${t.type}`)
+          );
+          const dedupedParsed = allParsed.filter(p => {
+            const hash = `${p.date}|${p.description}|${p.amount}|${p.type}`;
+            if (existingHashes.has(hash)) return false;
+            existingHashes.add(hash); // also dedup within the batch
+            return true;
+          });
+          const skipped = allParsed.length - dedupedParsed.length;
+          if (skipped > 0) console.log(`[Upload] Skipped ${skipped} duplicate transactions`);
+
+          const newTxs: Transaction[] = dedupedParsed.map((p, i) => {
             // 1. Check memory first
             const mem = findInMemory(p.description, client.id);
             if (mem) {
@@ -206,6 +219,10 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
             };
           });
           c.transactions = [...c.transactions, ...newTxs];
+
+          const autoCount = newTxs.filter(t => t.classifiedBy !== "pending").length;
+          const pendingCount = newTxs.filter(t => t.classifiedBy === "pending").length;
+          console.log(`[Upload] ${newTxs.length} imported, ${autoCount} auto-classified, ${pendingCount} pending${skipped > 0 ? `, ${skipped} duplicates skipped` : ""}`);
         } else if (pdfError) {
           setParseError("Não foi possível ler o PDF (sem conexão com CDN). Alternativa: no app Stone vá em Extrato → ⋮ → Exportar → CSV.");
         } else {
