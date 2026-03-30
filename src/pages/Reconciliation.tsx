@@ -169,7 +169,7 @@ function parseManualText(text: string): Transaction[] {
   for (const line of lines) {
     // Try pipe-separated: 01/01/2026 | Tipo | Desc | 5.000,00 | 15.000,00 | Contraparte
     const pipeParts = line.split("|").map(s => s.trim());
-    if (pipeParts.length >= 4 && /\d{2}\/\d{2}\/\d{4}/.test(pipeParts[0])) {
+    if (pipeParts.length >= 4 && /\d{2}\/\d{2}\/\d{2,4}/.test(pipeParts[0])) {
       const amount = parseManualAmount(pipeParts[3]);
       const balance = pipeParts.length > 4 ? parseManualAmount(pipeParts[4]) : 0;
       transactions.push({
