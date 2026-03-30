@@ -121,7 +121,7 @@ function extractStoneData(lines: string[]): { info: BankInfo; transactions: Tran
     // Find all amounts in the line
     const amounts: number[] = [];
     let m;
-    const amountRe = /(-?\s*R?\$?\s*[\d.]+,\d{2})/g;
+    const amountRe = /(-\s*)?R?\$?\s*([\d.]+,\d{2})/g;
     while ((m = amountRe.exec(rest)) !== null) {
       let raw = m[1].replace(/\s/g, "").replace(/R\$/g, "");
       const isNeg = raw.startsWith("-");
