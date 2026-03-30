@@ -75,6 +75,16 @@ export const CLASSIFICATION_RULES: ClassificationRule[] = [
   // Retiradas dos Sócios (R80–R81)
   { id: "R80", priority: 9, type: "D", category: "Retiradas dos Sócios", pattern: /RETIRADA\s*SÓCIO|RETIRADA\s*SOCIO|PRO[\s-]?LABORE/i, examples: ["RETIRADA SÓCIO", "PRO-LABORE SOCIOS"] },
   { id: "R81", priority: 9, type: "D", category: "Retiradas dos Sócios", pattern: /DIVIDENDO|DISTRIBUIÇÃO\s*LUCRO|DISTRIBUICAO\s*LUCRO/i, examples: ["DIVIDENDOS TRIMESTRAIS"] },
+
+  // Stone / Maquininha — specific patterns (R90–R99)
+  { id: "R90", priority: 1, type: "D", category: "Despesas Bancárias", pattern: /^TARIFA$|^TARIFA\s*[-–]/i, examples: ["Tarifa", "Tarifa - Stone"] },
+  { id: "R91", priority: 1, type: "C", category: "Receita de Vendas", pattern: /RECEBIMENTO\s*VENDAS.*ANTECIPA[CÇ]/i, examples: ["Recebimento vendas Antecipação"] },
+  { id: "R92", priority: 1, type: "C", category: "Receita de Vendas", pattern: /RECEBIMENTO\s*VENDAS/i, examples: ["Recebimento vendas"] },
+  { id: "R93", priority: 2, type: "C", category: "Receita de Vendas", pattern: /PIX\s*\|\s*MAQUININHA|MAQUININHA/i, examples: ["BRAZAUK LTD | Pix | Maquininha", "Pix | Maquininha"] },
+  { id: "R94", priority: 2, type: "C", category: "Receita de Vendas", pattern: /DEP[OÓ]SITO\s*DE\s*VENDAS/i, examples: ["Depósito de vendas"] },
+  { id: "R95", priority: 3, type: "D", category: "Despesas Bancárias", pattern: /TAXA\s*STONE|STONE\s*TAXA/i, examples: ["TAXA STONE MENSAL"] },
+  { id: "R96", priority: 3, type: "C", category: "Receita de Serviços", pattern: /PIX\s*REC|CRED\s*PIX|PIX\s*RECEBIDO/i, examples: ["PIX REC CLIENTE", "CRED PIX"] },
+  { id: "R97", priority: 3, type: "D", category: "Despesas Bancárias", pattern: /PIX\s*ENV|PIX\s*ENVIADO/i, examples: ["PIX ENVIADO FORNECEDOR"] },
 ];
 
 export interface ClassificationResult {
