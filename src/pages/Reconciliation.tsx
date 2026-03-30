@@ -103,15 +103,19 @@ function extractStoneData(lines: string[]): { info: BankInfo; transactions: Tran
   const periodMatch = fullText.match(/(?:Período|Periodo)[:\s]*(\d{2}\/\d{2}\/\d{4})\s*(?:a|até|-)\s*(\d{2}\/\d{2}\/\d{4})/i);
   if (periodMatch) info.period = `${periodMatch[1]} a ${periodMatch[2]}`;
 
-  // Parse transaction lines — look for lines starting with date DD/MM/YYYY
-  const DATE_RE = /^(\d{2}\/\d{2}\/\d{4})/;
+  // Parse transaction lines — look for lines starting with date DD/MM/YYYY or DD/MM/YY
+  const DATE_RE = /^(\d{2}\/\d{2}\/\d{2,4})/;
   const AMOUNT_RE = /(-?\s*R?\$?\s*[\d.]+,\d{2})/g;
 
   for (const line of lines) {
     const dateMatch = DATE_RE.exec(line);
     if (!dateMatch) continue;
 
-    const date = dateMatch[1];
+    // Normalize 2-digit year to 4-digit
+    const dateParts = dateMatch[1].split("/");
+    let yr = dateParts[2];
+    if (yr.length === 2) yr = (parseInt(yr) > 50 ? "19" : "20") + yr;
+    const date = `${dateParts[0]}/${dateParts[1]}/${yr}`;
     const rest = line.substring(dateMatch[0].length).trim();
 
     // Find all amounts in the line
