@@ -133,7 +133,7 @@ function extractStoneData(lines: string[]): { info: BankInfo; transactions: Tran
     if (amounts.length < 1) continue;
 
     // Remove amounts from text to get description parts
-    const textPart = rest.replace(/(-?\s*R?\$?\s*[\d.]+,\d{2})/g, "|||").trim();
+    const textPart = rest.replace(/(-\s*)?R?\$?\s*[\d.]+,\d{2}/g, "|||").trim();
     const parts = textPart.split("|||").map(s => s.trim()).filter(Boolean);
 
     // Heuristic: first text part = type, rest = description + counterpart
