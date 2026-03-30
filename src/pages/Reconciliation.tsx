@@ -123,10 +123,9 @@ function extractStoneData(lines: string[]): { info: BankInfo; transactions: Tran
     let m;
     const amountRe = /(-\s*)?R?\$?\s*([\d.]+,\d{2})/g;
     while ((m = amountRe.exec(rest)) !== null) {
-      let raw = m[1].replace(/\s/g, "").replace(/R\$/g, "");
-      const isNeg = raw.startsWith("-");
-      raw = raw.replace(/^[+-]/, "");
-      const val = parseFloat(raw.replace(/\./g, "").replace(",", "."));
+      const isNeg = !!(m[1] && m[1].trim() === "-");
+      const numPart = m[2];
+      const val = parseFloat(numPart.replace(/\./g, "").replace(",", "."));
       if (!isNaN(val)) amounts.push(isNeg ? -val : val);
     }
 
