@@ -187,7 +187,7 @@ function parseManualText(text: string): Transaction[] {
 
     // Try tab-separated
     const tabParts = line.split("\t").map(s => s.trim());
-    if (tabParts.length >= 4 && /\d{2}\/\d{2}\/\d{4}/.test(tabParts[0])) {
+    if (tabParts.length >= 4 && /\d{2}\/\d{2}\/\d{2,4}/.test(tabParts[0])) {
       const amount = parseManualAmount(tabParts[3]);
       const balance = tabParts.length > 4 ? parseManualAmount(tabParts[4]) : 0;
       transactions.push({
