@@ -1,37 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseOFX, parseCSV } from "@/data/fileParser";
-
-describe("parseOFX", () => {
-  it("parses a basic OFX SGML file", () => {
-    const ofx = `
-<OFX>
-<BANKMSGSRSV1>
-<STMTTRNRS>
-<STMTRS>
-<BANKTRANLIST>
-<STMTTRN>
-<TRNTYPE>CREDIT
-<DTPOSTED>20260115
-<TRNAMT>1500.00
-<MEMO>PIX REC CLIENTE
-</STMTTRN>
-<STMTTRN>
-<TRNTYPE>DEBIT
-<DTPOSTED>20260116
-<TRNAMT>-89.90
-<MEMO>TARIFA BANCARIA
-</STMTTRN>
-</BANKTRANLIST>
-</STMTRS>
-</STMTTRNRS>
-</BANKMSGSRSV1>
-</OFX>`;
-    const result = parseOFX(ofx);
-    expect(result).toHaveLength(2);
-    expect(result[0]).toMatchObject({ date: "2026-01-15", type: "credit", amount: 1500 });
-    expect(result[1]).toMatchObject({ date: "2026-01-16", type: "debit", amount: 89.90 });
-  });
-});
+import { parseCSVContent as parseCSV } from "@/data/parsers/csvGenericParser";
 
 describe("parseCSV", () => {
   it("parses a semicolon-separated Brazilian CSV", () => {
@@ -50,5 +18,37 @@ describe("parseCSV", () => {
     const result = parseCSV(csv);
     expect(result).toHaveLength(1);
     expect(result[0].date).toBe("2026-01-15");
+  });
+});
+
+describe("OFX Parser", () => {
+  it("parses a basic OFX SGML file", async () => {
+    const { ofxParser } = await import("@/data/parsers/ofxParser");
+    const ofx = `
+<OFX>
+<BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKTRANLIST>
+<STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20260115<TRNAMT>1500.00<MEMO>PIX REC CLIENTE</STMTTRN>
+<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260116<TRNAMT>-89.90<MEMO>TARIFA BANCARIA</STMTTRN>
+</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>`;
+    const result = await ofxParser.parse({ fileName: "test.ofx", mimeType: "", textContent: ofx });
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({ date: "2026-01-15", type: "credit", amount: 1500 });
+    expect(result[1]).toMatchObject({ date: "2026-01-16", type: "debit", amount: 89.90 });
+  });
+});
+
+describe("ParserRegistry", () => {
+  it("scores OFX parser highest for OFX content", async () => {
+    const { ofxParser } = await import("@/data/parsers/ofxParser");
+    const score = ofxParser.canParse({ fileName: "test.ofx", mimeType: "", textContent: "<OFX><STMTTRN>" });
+    expect(score).toBeGreaterThanOrEqual(0.99);
+  });
+
+  it("scores Stone parser for Stone PDF text", async () => {
+    const { stonePdfParser } = await import("@/data/parsers/stonePdfParser");
+    const score = stonePdfParser.canParse({
+      fileName: "stone.pdf", mimeType: "", textLines: ["Stone Instituição de Pagamento", "DESCRIÇÃO VALOR SALDO"],
+    });
+    expect(score).toBeGreaterThanOrEqual(0.85);
   });
 });
