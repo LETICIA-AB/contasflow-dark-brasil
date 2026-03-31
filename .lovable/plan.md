@@ -1,64 +1,116 @@
 
 
-## Diagnóstico e Correção do Pipeline de Extratos
+## Smart Layout: Parser Registry Multi-Banco
 
-### Problema Central
-As datas no PDF Stone usam formato `DD/MM/YY` (ano com 2 dígitos: `31/01/26`), mas ambos os parsers (`fileParser.ts` e `Reconciliation.tsx`) esperam `DD/MM/YYYY` (4 dígitos). Resultado: zero transações extraídas.
+### Resumo
+Refatorar o sistema de importação de extratos para uma arquitetura baseada em **plugins** (`StatementParser`), com registry automático que detecta o formato do arquivo e seleciona o parser correto. Cobre: BB, Stone, Santander, PagBank, Itaú, InfinitePay/Cloudwalk, PicPay. Adiciona suporte a XLSX via SheetJS e um Wizard de mapeamento de colunas para CSV/XLSX desconhecidos.
 
-### Fluxo Atual no Código
-
-| Etapa | Arquivo | Status |
-|-------|---------|--------|
-| Upload + leitura | `UploadsView.tsx` (handleFiles) | OK — lê corretamente com fallback de encoding |
-| Parse OFX | `fileParser.ts` (parseOFX) | OK — funcional |
-| Parse CSV | `fileParser.ts` (parseCSV) | OK — funcional |
-| Parse PDF (geral) | `fileParser.ts` (parsePDF → parsePDFLines) | **QUEBRADO** — regex de data não aceita DD/MM/YY |
-| Parse PDF (Stone) | `Reconciliation.tsx` (parseStoneExtract → extractStoneData) | **QUEBRADO** — mesma razão |
-| Insert transações | `UploadsView.tsx` (salva em localStorage) | OK — sem RLS (não usa Supabase) |
-| Duplicidade | Nenhuma proteção | **FALTANDO** |
-
-### Plano de Correção (4 mudanças)
-
-**1. Corrigir regex de data nos dois parsers**
-
-Em `fileParser.ts` (`parsePDFLines`): mudar `DATE_RE` de `(\d{2}\/\d{2}\/\d{4})` para `(\d{2}\/\d{2}\/(?:\d{4}|\d{2}))` e converter ano de 2 dígitos para 4 dígitos (`26` → `2026`).
-
-Em `Reconciliation.tsx` (`extractStoneData`): mesma correção no `DATE_RE` e na conversão de ano. Também ajustar o regex de período que já funciona (usa 4 dígitos no header).
-
-**2. Corrigir regex de valor negativo no Stone parser**
-
-O PDF Stone usa `- R$ 0,30` (espaço entre `-` e `R$`). Ajustar o `AMOUNT_RE` em ambos os arquivos para capturar padrão `- R$` com espaço.
-
-Em `fileParser.ts`: `AMOUNT_RE` atual já tem `[+-]?\s*R?\$?` — parece OK mas precisa validar que o `-` no início da linha é capturado mesmo quando separado por espaço do valor.
-
-Em `Reconciliation.tsx`: o regex `(-?\s*R?\$?\s*[\d.]+,\d{2})` precisa aceitar `- R$ 0,30` — ajustar para `(-\s*)?R?\$?\s*[\d.]+,\d{2}`.
-
-**3. Adicionar proteção contra duplicidade**
-
-Em `UploadsView.tsx` (`handleFiles`): antes de inserir novas transações, verificar se já existe transação com mesmo `date + description + amount + type`. Usar um Set de hashes para filtrar duplicatas.
-
-**4. Copiar fixture PDF para o projeto e adicionar instrumentação**
-
-- Copiar `STONE_01.2026.pdf` para `public/fixtures/` para testes futuros
-- Melhorar logs com contagem clara: `"X transações importadas, Y auto-classificadas, Z pendentes"`
-- Na UI, após parse com sucesso, exibir banner com esses números
-
-### Arquivos Modificados
-- `src/data/fileParser.ts` — fix date regex + amount regex em `parsePDFLines`
-- `src/pages/Reconciliation.tsx` — fix date regex + amount regex em `extractStoneData`
-- `src/components/client/UploadsView.tsx` — deduplicação + melhor feedback
-- `public/fixtures/STONE_01.2026.pdf` — fixture para teste (cópia do upload)
-
-### Detalhes Técnicos
+### Arquitetura
 
 ```text
-Antes (não funciona):
-  DATE_RE = /(\d{2}\/\d{2}\/\d{4})/     → não casa "31/01/26"
-
-Depois (funciona):
-  DATE_RE = /(\d{2}\/\d{2}\/\d{2,4})/   → casa "31/01/26" e "31/01/2026"
-  
-  // Conversão:
-  if (year.length === 2) year = (parseInt(year) > 50 ? "19" : "20") + year;
+UploadsView.tsx
+  └─ handleFiles()
+       └─ ParserRegistry.parse(file)
+            ├─ detectFormat(lines/content) → score por parser
+            ├─ bestParser.parse(input) → ParsedTransaction[]
+            └─ fallback: score < 0.6 → "layout não suportado" + salva amostra
 ```
+
+### Arquivos Novos
+
+**`src/data/parsers/types.ts`** — Interface `StatementParser`
+```ts
+interface ParserContext {
+  fileName: string;
+  mimeType: string;
+  textContent?: string;      // para OFX/CSV/TXT
+  buffer?: ArrayBuffer;       // para PDF/XLSX
+  textLines?: string[];       // linhas extraídas de PDF
+}
+
+interface StatementParser {
+  id: string;
+  name: string;
+  supportedFormats: string[]; // ["pdf"], ["csv","txt"], ["ofx"], ["xlsx"]
+  canParse(ctx: ParserContext): number; // 0..1
+  parse(ctx: ParserContext): Promise<ParsedTransaction[]>;
+}
+```
+
+**`src/data/parsers/registry.ts`** — `ParserRegistry`
+- `register(parser)`, `parse(ctx)`: itera parsers, chama `canParse`, escolhe o de maior score
+- Se nenhum score >= 0.6: retorna erro + salva `ctx.textContent?.slice(0, 5000)` ou primeiras 200 linhas em `localStorage` key `cf-unsupported-sample-{timestamp}` para debug
+
+**`src/data/parsers/stonePdfParser.ts`** — Mover `parseStonePDFLines` atual
+- `canParse`: score 0.95 se texto contém "stone instituição" ou "DESCRIÇÃO.*VALOR.*SALDO"
+- `parse`: reutiliza lógica existente de blocos
+
+**`src/data/parsers/cloudwalkPdfParser.ts`** — Mover `parseInfinitePayLines`
+- `canParse`: score 0.95 se contém "infinitepay|cloudwalk|tipo de transa"
+
+**`src/data/parsers/genericPdfParser.ts`** — Mover `parsePDFLinesGeneric`
+- `canParse`: score 0.3 (fallback, só usado se nenhum outro casar)
+
+**`src/data/parsers/ofxParser.ts`** — Mover `parseOFX`
+- `canParse`: score 0.99 se contém `<OFX` ou `<STMTTRN>`
+
+**`src/data/parsers/csvGenericParser.ts`** — Mover `parseCSV`
+- `canParse`: score 0.7 se detecta delimitador e headers reconhecíveis; 0.4 se posicional
+- Se colunas não reconhecidas (dateCol === -1 || descCol === -1): retorna score 0.5 e sinaliza `needsMapping: true`
+
+**`src/data/parsers/xlsxParser.ts`** — Novo parser XLSX
+- Usa SheetJS (`xlsx` package, já existe no browser como CDN ou npm)
+- `canParse`: score 0.99 se extensão é .xlsx/.xls
+- `parse`: lê primeira aba (ou permite escolha), converte para linhas CSV-like, reutiliza a mesma lógica de detecção de colunas do CSV parser
+- Se colunas não reconhecidas → `needsMapping: true`
+
+**`src/data/parsers/pdfExtractor.ts`** — Função compartilhada
+- Extrair a lógica de PDF.js (carregar CDN, extrair linhas com posição x/y) em função reutilizável
+- Todos os PDF parsers recebem `textLines` já prontas
+
+### Arquivos Modificados
+
+**`src/data/fileParser.ts`** — Simplificar
+- Manter como facade: exportar `parseFile(file: File): Promise<ParsedTransaction[]>`
+- Internamente usa `ParserRegistry`
+- Remover as funções individuais (movidas para parsers/)
+
+**`src/components/client/UploadsView.tsx`**
+- `handleFiles` chama `parseFile(file)` em vez de if/else por extensão
+- Adicionar estado `needsMapping` → quando true, abre o **Column Mapping Wizard**
+- Wizard: modal com preview das primeiras 5 linhas + dropdowns para mapear "Data", "Descrição", "Valor", "Tipo" (opcional)
+- Após mapeamento, re-parseia com as colunas selecionadas
+
+**`src/data/classificationRules.ts`** — Expandir `classifyTransaction`
+- Receber `classText` composto (não apenas `desc`): `tipo + " " + descricaoCompleta + " " + contraparte`
+- Adicionar assinatura: `classifyTransaction(classText: string, type: "credit"|"debit")`
+- Atualizar chamadas em UploadsView e ClassifyView
+
+**`src/components/client/UploadsView.tsx`** — Aceitar .xlsx
+- Adicionar `.xlsx, .xls` à lista `accepted`
+- Ler como ArrayBuffer (como PDF)
+
+### Wizard de Mapeamento de Colunas
+
+Componente `src/components/client/ColumnMappingWizard.tsx`:
+- Props: `headers: string[]`, `sampleRows: string[][]`, `onConfirm(mapping)`, `onCancel`
+- UI: tabela com preview + 4 selects (Data, Descrição, Valor, Tipo)
+- Compartilhado entre CSV e XLSX (mesmo componente)
+
+### Dependências
+
+- Adicionar `xlsx` (SheetJS) via npm para parsing de planilhas no browser
+- PDF.js continua via CDN (já funciona)
+
+### Testes
+
+- Mover fixtures existentes + usar os PDFs já em `public/fixtures/`
+- Testes unitários para cada parser: `canParse` retorna score esperado + `parse` extrai transações corretas
+- Teste do registry: dado um arquivo Stone PDF, seleciona `stonePdfParser`
+
+### O que NÃO muda
+- Estrutura de `Transaction`, `Client`, localStorage
+- Fluxo de classificação (memória → regras → pendente)
+- Página de Reconciliação (`/conciliacao`) — mantém parser próprio
+- Helpers `brHelpers.ts` — reutilizados por todos os parsers
 
