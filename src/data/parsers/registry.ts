@@ -1,4 +1,4 @@
-import type { StatementParser, ParserContext, ParserResult } from "./types";
+import type { StatementParser, ParserContext } from "./types";
 import type { ParsedTransaction } from "../fileParser";
 import { extractPDFLines } from "./pdfExtractor";
 
