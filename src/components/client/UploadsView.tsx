@@ -4,7 +4,8 @@ import { addNotification } from "@/data/notificationStore";
 import { classifyTransaction } from "@/data/classificationRules";
 import { resolveAccounts } from "@/data/chartOfAccounts";
 import { findInMemory } from "@/data/memoryStore";
-import { parseOFX, parseCSV, parsePDF } from "@/data/fileParser";
+import { parseFile, parseCSVWithMapping, getCSVHeaders, getXlsxHeaders } from "@/data/fileParser";
+import ColumnMappingWizard from "./ColumnMappingWizard";
 import { CheckCircle2, AlertTriangle, Lock, FolderUp, Clock, ChevronDown, ChevronRight } from "lucide-react";
 
 interface Props {
@@ -43,10 +44,19 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
   const [processing, setProcessing] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [expandedUploadId, setExpandedUploadId] = useState<string | null>(null);
+  const [importStats, setImportStats] = useState<{ imported: number; auto: number; pending: number; skipped: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Column mapping wizard state
+  const [wizardData, setWizardData] = useState<{
+    headers: string[];
+    sampleRows: string[][];
+    rawContent: string;
+    fileName: string;
+  } | null>(null);
+
   const periods = ["Out/2025", "Nov/2025", "Dez/2025", "Jan/2026", "Fev/2026", "Mar/2026"];
-  const accepted = [".ofx", ".csv", ".txt", ".pdf"];
+  const accepted = [".ofx", ".csv", ".txt", ".pdf", ".xlsx", ".xls"];
 
   const uploadedPeriods = new Set(uploads.map((u) => u.period));
   const missingMonths = MONTHS.filter(
@@ -65,25 +75,80 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
   const progress = total > 0 ? Math.round((classified / total) * 100) : 100;
   const canSubmit = pending.length === 0 && total > 0;
 
+  const insertTransactions = (allParsed: import("@/data/fileParser").ParsedTransaction[]) => {
+    const allClients = loadClients();
+    const c = allClients.find((cl) => cl.id === client.id);
+    if (!c) return;
+
+    // Deduplication
+    const existingHashes = new Set(
+      c.transactions.map(t => `${t.date}|${t.description}|${t.amount}|${t.type}`)
+    );
+    const dedupedParsed = allParsed.filter(p => {
+      const hash = `${p.date}|${p.description}|${p.amount}|${p.type}`;
+      if (existingHashes.has(hash)) return false;
+      existingHashes.add(hash);
+      return true;
+    });
+    const skipped = allParsed.length - dedupedParsed.length;
+    if (skipped > 0) console.log(`[Upload] Skipped ${skipped} duplicate transactions`);
+
+    const newTxs: Transaction[] = dedupedParsed.map((p, i) => {
+      const mem = findInMemory(p.description, client.id);
+      if (mem) {
+        return {
+          id: `${client.id}-t${Date.now()}-${i}`,
+          date: p.date, description: p.description, amount: p.amount, type: p.type,
+          category: mem.category, classifiedBy: "memory" as const,
+          debitAccount: mem.debitAccount, creditAccount: mem.creditAccount,
+          clientDescription: mem.clientDescription, approved: false,
+        };
+      }
+      const result = classifyTransaction(p.description, p.type);
+      const category = result.auto ? result.category : "";
+      let debitAccount = "", creditAccount = "";
+      if (result.auto) {
+        const accounts = resolveAccounts(result.category, p.type, client.bank);
+        debitAccount = accounts.debit;
+        creditAccount = accounts.credit;
+      }
+      return {
+        id: `${client.id}-t${Date.now()}-${i}`,
+        date: p.date, description: p.description, amount: p.amount, type: p.type,
+        category, classifiedBy: result.auto ? "auto" as const : "pending" as const,
+        ruleId: result.auto ? result.ruleId : undefined,
+        debitAccount, creditAccount, approved: false,
+      };
+    });
+
+    c.transactions = [...c.transactions, ...newTxs];
+    const autoCount = newTxs.filter(t => t.classifiedBy !== "pending").length;
+    const pendingCount = newTxs.filter(t => t.classifiedBy === "pending").length;
+    console.log(`[Upload] ${newTxs.length} imported, ${autoCount} auto-classified, ${pendingCount} pending${skipped > 0 ? `, ${skipped} duplicates skipped` : ""}`);
+
+    setImportStats({ imported: newTxs.length, auto: autoCount, pending: pendingCount, skipped });
+    saveClients(allClients);
+    onUpdate();
+  };
+
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setProcessing(true);
     setParseError(null);
+    setImportStats(null);
 
     const fileArray = Array.from(files);
 
-    // PDFs → ArrayBuffer; text files → try multiple encodings
     const readers: Promise<{ file: File; content: string; buffer?: ArrayBuffer }>[] = fileArray.map(
       (f) => {
         const ext = f.name.toLowerCase().split(".").pop() || "";
         return new Promise((resolve) => {
-          if (ext === "pdf") {
+          if (ext === "pdf" || ext === "xlsx" || ext === "xls") {
             const reader = new FileReader();
             reader.onload = () => resolve({ file: f, content: "", buffer: reader.result as ArrayBuffer });
             reader.onerror = () => resolve({ file: f, content: "" });
             reader.readAsArrayBuffer(f);
           } else {
-            // Try UTF-8 first, then ISO-8859-1 (common for Brazilian bank files)
             const tryRead = (encoding: string): Promise<string> =>
               new Promise((res) => {
                 const r = new FileReader();
@@ -93,17 +158,12 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
               });
 
             tryRead("UTF-8").then((utf8Content) => {
-              // If UTF-8 produced replacement chars, try Latin-1
               if (utf8Content.includes("\uFFFD") || utf8Content.includes("ï»¿")) {
                 tryRead("ISO-8859-1").then((latinContent) => {
-                  console.log(`[Upload] Re-read ${f.name} as ISO-8859-1 (${latinContent.length} chars)`);
                   resolve({ file: f, content: latinContent });
                 });
               } else {
-                // Remove BOM if present
-                const content = utf8Content.replace(/^\uFEFF/, "");
-                console.log(`[Upload] Read ${f.name} as UTF-8 (${content.length} chars)`);
-                resolve({ file: f, content });
+                resolve({ file: f, content: utf8Content.replace(/^\uFEFF/, "") });
               }
             });
           }
@@ -128,112 +188,84 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
       setUploads(updated.filter((u) => u.clientId === client.id));
 
       let allParsed: import("@/data/fileParser").ParsedTransaction[] = [];
-      let pdfError = false;
+      let hadError = false;
 
       for (const { file, content, buffer } of results) {
-        const ext = file.name.toLowerCase().split(".").pop() || "";
-        console.log(`[Upload] Processing ${file.name} (ext=${ext}, contentLen=${content.length}, hasBuffer=${!!buffer})`);
-        if (ext === "pdf") {
-          if (!buffer) continue;
-          try {
-            const parsed = await parsePDF(buffer);
-            console.log(`[Upload] PDF parsed: ${parsed.length} transactions`);
-            allParsed = [...allParsed, ...parsed];
-          } catch (err) {
-            console.error("[Upload] PDF parse error:", err);
-            pdfError = true;
+        console.log(`[Upload] Processing ${file.name}`);
+        try {
+          const result = await parseFile(file, content || undefined, buffer);
+
+          if (result.unsupported) {
+            // Check if we can offer wizard for CSV/XLSX
+            const ext = file.name.toLowerCase().split(".").pop() || "";
+            if ((ext === "csv" || ext === "txt") && content) {
+              const { headers, sampleRows } = getCSVHeaders(content);
+              if (headers.length > 0) {
+                setWizardData({ headers, sampleRows, rawContent: content, fileName: file.name });
+                setProcessing(false);
+                return;
+              }
+            }
+            if ((ext === "xlsx" || ext === "xls") && buffer) {
+              const { headers, sampleRows } = getXlsxHeaders(buffer);
+              if (headers.length > 0) {
+                // Convert to CSV for wizard reuse
+                const XLSX = await import("xlsx");
+                const wb = XLSX.read(buffer, { type: "array" });
+                const csvContent = XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]], { FS: ";" });
+                setWizardData({ headers, sampleRows, rawContent: csvContent, fileName: file.name });
+                setProcessing(false);
+                return;
+              }
+            }
+            setParseError(`Layout não suportado para "${file.name}". Tente OFX, CSV ou PDF de bancos suportados (Stone, InfinitePay).`);
+            hadError = true;
+            continue;
           }
-        } else {
-          if (!content) { console.log("[Upload] Empty content, skipping"); continue; }
-          // Log first 200 chars for debugging
-          console.log(`[Upload] Content preview: ${content.substring(0, 200)}`);
-          if (ext === "ofx") {
-            const parsed = parseOFX(content);
-            console.log(`[Upload] OFX parsed: ${parsed.length} transactions`);
-            allParsed = [...allParsed, ...parsed];
-          } else if (ext === "csv" || ext === "txt") {
-            const parsed = parseCSV(content);
-            console.log(`[Upload] CSV parsed: ${parsed.length} transactions`);
-            allParsed = [...allParsed, ...parsed];
+
+          if (result.transactions.length === 0 && !result.unsupported) {
+            // Parser matched but found 0 txs — might need wizard for CSV
+            const ext = file.name.toLowerCase().split(".").pop() || "";
+            if ((ext === "csv" || ext === "txt") && content) {
+              const { headers, sampleRows } = getCSVHeaders(content);
+              if (headers.length >= 2) {
+                setWizardData({ headers, sampleRows, rawContent: content, fileName: file.name });
+                setProcessing(false);
+                return;
+              }
+            }
           }
+
+          console.log(`[Upload] ${result.parserName}: ${result.transactions.length} transactions`);
+          allParsed = [...allParsed, ...result.transactions];
+        } catch (err) {
+          console.error(`[Upload] Error parsing ${file.name}:`, err);
+          hadError = true;
         }
       }
 
-      const allClients = loadClients();
-      const c = allClients.find((cl) => cl.id === client.id);
-      if (c) {
-        if (allParsed.length > 0) {
-          // Deduplication: build hash set of existing transactions
-          const existingHashes = new Set(
-            c.transactions.map(t => `${t.date}|${t.description}|${t.amount}|${t.type}`)
-          );
-          const dedupedParsed = allParsed.filter(p => {
-            const hash = `${p.date}|${p.description}|${p.amount}|${p.type}`;
-            if (existingHashes.has(hash)) return false;
-            existingHashes.add(hash); // also dedup within the batch
-            return true;
-          });
-          const skipped = allParsed.length - dedupedParsed.length;
-          if (skipped > 0) console.log(`[Upload] Skipped ${skipped} duplicate transactions`);
-
-          const newTxs: Transaction[] = dedupedParsed.map((p, i) => {
-            // 1. Check memory first
-            const mem = findInMemory(p.description, client.id);
-            if (mem) {
-              return {
-                id: `${client.id}-t${Date.now()}-${i}`,
-                date: p.date,
-                description: p.description,
-                amount: p.amount,
-                type: p.type,
-                category: mem.category,
-                classifiedBy: "memory" as const,
-                debitAccount: mem.debitAccount,
-                creditAccount: mem.creditAccount,
-                clientDescription: mem.clientDescription,
-                approved: false,
-              };
-            }
-            // 2. Check regex rules
-            const result = classifyTransaction(p.description, p.type);
-            const category = result.auto ? result.category : "";
-            let debitAccount = "";
-            let creditAccount = "";
-            if (result.auto) {
-              const accounts = resolveAccounts(result.category, p.type, client.bank);
-              debitAccount = accounts.debit;
-              creditAccount = accounts.credit;
-            }
-            return {
-              id: `${client.id}-t${Date.now()}-${i}`,
-              date: p.date,
-              description: p.description,
-              amount: p.amount,
-              type: p.type,
-              category,
-              classifiedBy: result.auto ? "auto" as const : "pending" as const,
-              ruleId: result.auto ? result.ruleId : undefined,
-              debitAccount,
-              creditAccount,
-              approved: false,
-            };
-          });
-          c.transactions = [...c.transactions, ...newTxs];
-
-          const autoCount = newTxs.filter(t => t.classifiedBy !== "pending").length;
-          const pendingCount = newTxs.filter(t => t.classifiedBy === "pending").length;
-          console.log(`[Upload] ${newTxs.length} imported, ${autoCount} auto-classified, ${pendingCount} pending${skipped > 0 ? `, ${skipped} duplicates skipped` : ""}`);
-        } else if (pdfError) {
-          setParseError("Não foi possível ler o PDF (sem conexão com CDN). Alternativa: no app Stone vá em Extrato → ⋮ → Exportar → CSV.");
-        } else {
-          setParseError("Nenhuma transação encontrada. Verifique se o formato é OFX ou CSV bancário válido.");
-        }
-        saveClients(allClients);
-        onUpdate();
+      if (allParsed.length > 0) {
+        insertTransactions(allParsed);
+      } else if (hadError) {
+        setParseError("Não foi possível ler o arquivo. Verifique o formato ou tente exportar como CSV/OFX.");
+      } else {
+        setParseError("Nenhuma transação encontrada. Verifique se o formato é válido.");
       }
 
       setProcessing(false);
     });
+  };
+
+  const handleWizardConfirm = (mapping: { dateCol: number; descCol: number; amountCol: number; typeCol?: number }) => {
+    if (!wizardData) return;
+    const parsed = parseCSVWithMapping(wizardData.rawContent, mapping);
+    console.log(`[Upload Wizard] Mapped ${parsed.length} transactions from ${wizardData.fileName}`);
+    if (parsed.length > 0) {
+      insertTransactions(parsed);
+    } else {
+      setParseError("Nenhuma transação encontrada com o mapeamento selecionado.");
+    }
+    setWizardData(null);
   };
 
   const handleSubmit = () => {
@@ -262,6 +294,16 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
 
   return (
     <div className="space-y-5 cf-stagger">
+      {/* Wizard modal */}
+      {wizardData && (
+        <ColumnMappingWizard
+          headers={wizardData.headers}
+          sampleRows={wizardData.sampleRows}
+          onConfirm={handleWizardConfirm}
+          onCancel={() => { setWizardData(null); setProcessing(false); }}
+        />
+      )}
+
       {/* Header */}
       <div>
         <h2 className="text-2xl font-bold font-heading">Envios</h2>
@@ -304,7 +346,7 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
                 </div>
                 <div className="text-center">
                   <p className="text-sm font-medium">Arraste ou clique para enviar</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">OFX · CSV · TXT · PDF</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">OFX · CSV · TXT · PDF · XLSX</p>
                 </div>
               </>
             )}
@@ -316,13 +358,31 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
               <AlertTriangle className="w-4 h-4 text-cf-red shrink-0 mt-0.5" />
               <div>
                 <p className="text-cf-red text-xs font-medium">{parseError}</p>
-                <p className="text-cf-red/60 text-[11px] mt-0.5">Formatos: OFX (extrato bancário) e CSV com data, descrição e valor.</p>
+                <p className="text-cf-red/60 text-[11px] mt-0.5">Formatos: OFX, CSV, PDF (Stone/InfinitePay), XLSX.</p>
               </div>
             </div>
           )}
 
-          {/* Inline success banner */}
-          {!parseError && !processing && total > 0 && pending.length > 0 && onNavigate && (
+          {/* Import stats banner */}
+          {importStats && importStats.imported > 0 && (
+            <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg bg-cf-green/10 border border-cf-green/25">
+              <div className="flex items-center gap-2 min-w-0">
+                <CheckCircle2 className="w-4 h-4 text-cf-green shrink-0" />
+                <p className="text-xs text-cf-green font-medium truncate">
+                  {importStats.imported} importadas · {importStats.auto} auto-classificadas · {importStats.pending} pendentes
+                  {importStats.skipped > 0 && ` · ${importStats.skipped} duplicatas`}
+                </p>
+              </div>
+              {importStats.pending > 0 && onNavigate && (
+                <button className="cf-btn-primary text-xs py-1.5 px-3 whitespace-nowrap shrink-0" onClick={() => onNavigate("confirm")}>
+                  Conferir →
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Inline success banner (fallback when no import stats) */}
+          {!importStats && !parseError && !processing && total > 0 && pending.length > 0 && onNavigate && (
             <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg bg-cf-green/10 border border-cf-green/25">
               <div className="flex items-center gap-2 min-w-0">
                 <CheckCircle2 className="w-4 h-4 text-cf-green shrink-0" />
@@ -330,10 +390,7 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
                   {total} importadas · {pending.length} aguardando classificação
                 </p>
               </div>
-              <button
-                className="cf-btn-primary text-xs py-1.5 px-3 whitespace-nowrap shrink-0"
-                onClick={() => onNavigate("confirm")}
-              >
+              <button className="cf-btn-primary text-xs py-1.5 px-3 whitespace-nowrap shrink-0" onClick={() => onNavigate("confirm")}>
                 Conferir →
               </button>
             </div>
