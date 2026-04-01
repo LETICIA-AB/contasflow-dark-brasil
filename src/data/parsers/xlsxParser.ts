@@ -16,6 +16,7 @@ export const xlsxParser: StatementParser = {
   async parse(ctx: ParserContext): Promise<ParsedTransaction[]> {
     if (!ctx.buffer) return [];
 
+    const XLSX = await import("xlsx");
     const workbook = XLSX.read(ctx.buffer, { type: "array" });
     const sheetName = workbook.SheetNames[0];
     if (!sheetName) return [];
