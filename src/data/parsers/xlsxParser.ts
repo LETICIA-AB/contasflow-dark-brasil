@@ -1,7 +1,6 @@
 import type { StatementParser, ParserContext } from "./types";
 import type { ParsedTransaction } from "../fileParser";
 import { parseCSVContent } from "./csvGenericParser";
-import * as XLSX from "xlsx";
 
 export const xlsxParser: StatementParser = {
   id: "xlsx",
@@ -17,6 +16,7 @@ export const xlsxParser: StatementParser = {
   async parse(ctx: ParserContext): Promise<ParsedTransaction[]> {
     if (!ctx.buffer) return [];
 
+    const XLSX = await import("xlsx");
     const workbook = XLSX.read(ctx.buffer, { type: "array" });
     const sheetName = workbook.SheetNames[0];
     if (!sheetName) return [];
@@ -29,7 +29,8 @@ export const xlsxParser: StatementParser = {
   },
 };
 
-export function getXlsxHeaders(buffer: ArrayBuffer): { headers: string[]; sampleRows: string[][]; sheetNames: string[] } {
+export async function getXlsxHeaders(buffer: ArrayBuffer): Promise<{ headers: string[]; sampleRows: string[][]; sheetNames: string[] }> {
+  const XLSX = await import("xlsx");
   const workbook = XLSX.read(buffer, { type: "array" });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) return { headers: [], sampleRows: [], sheetNames: [] };
