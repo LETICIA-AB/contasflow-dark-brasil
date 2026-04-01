@@ -29,7 +29,8 @@ export const xlsxParser: StatementParser = {
   },
 };
 
-export function getXlsxHeaders(buffer: ArrayBuffer): { headers: string[]; sampleRows: string[][]; sheetNames: string[] } {
+export async function getXlsxHeaders(buffer: ArrayBuffer): Promise<{ headers: string[]; sampleRows: string[][]; sheetNames: string[] }> {
+  const XLSX = await import("xlsx");
   const workbook = XLSX.read(buffer, { type: "array" });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) return { headers: [], sampleRows: [], sheetNames: [] };
