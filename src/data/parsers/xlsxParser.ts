@@ -1,7 +1,6 @@
 import type { StatementParser, ParserContext } from "./types";
 import type { ParsedTransaction } from "../fileParser";
 import { parseCSVContent } from "./csvGenericParser";
-import * as XLSX from "xlsx";
 
 export const xlsxParser: StatementParser = {
   id: "xlsx",
