@@ -207,7 +207,7 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
               }
             }
             if ((ext === "xlsx" || ext === "xls") && buffer) {
-              const { headers, sampleRows } = getXlsxHeaders(buffer);
+              const { headers, sampleRows } = await getXlsxHeaders(buffer);
               if (headers.length > 0) {
                 // Convert to CSV for wizard reuse
                 const XLSX = await import("xlsx");
