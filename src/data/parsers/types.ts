@@ -8,6 +8,15 @@ export interface ParserContext {
   textLines?: string[];
 }
 
+// Extended parsed transaction with balance support
+export interface ParsedTransactionExt {
+  date: string;
+  description: string;
+  amount: number;
+  type: "credit" | "debit";
+  balance?: number;
+}
+
 export interface ParserResult {
   transactions: ParsedTransaction[];
   parserId: string;
