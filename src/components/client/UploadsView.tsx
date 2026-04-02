@@ -81,7 +81,17 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
     const c = allClients.find((cl) => cl.id === client.id);
     if (!c) return;
 
-    // Deduplication
+    // === NEW: Create BankTransaction + AccountingEntry + AccountingSplit ===
+    const importResult = importParsedTransactions(
+      allParsed,
+      client.id,
+      client.bank,
+      undefined,
+      client.chartOverrides
+    );
+    console.log(`[Upload/Models] ${importResult.bankTransactions.length} BankTransactions created, ${importResult.autoCount} auto, ${importResult.pendingCount} pending, ${importResult.skippedCount} skipped`);
+
+    // === LEGACY: Also create Transaction[] for backward compatibility ===
     const existingHashes = new Set(
       c.transactions.map(t => `${t.date}|${t.description}|${t.amount}|${t.type}`)
     );
@@ -92,9 +102,9 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
       return true;
     });
     const skipped = allParsed.length - dedupedParsed.length;
-    if (skipped > 0) console.log(`[Upload] Skipped ${skipped} duplicate transactions`);
 
     const newTxs: Transaction[] = dedupedParsed.map((p, i) => {
+      const classText = `${p.type === "credit" ? "Entrada" : "Saída"} ${p.description}`;
       const mem = findInMemory(p.description, client.id);
       if (mem) {
         return {
@@ -105,7 +115,7 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
           clientDescription: mem.clientDescription, approved: false,
         };
       }
-      const result = classifyTransaction(p.description, p.type);
+      const result = classifyTransaction(classText, p.type);
       const category = result.auto ? result.category : "";
       let debitAccount = "", creditAccount = "";
       if (result.auto) {
