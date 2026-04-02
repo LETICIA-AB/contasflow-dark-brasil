@@ -2,6 +2,12 @@ import type { StatementParser, ParserContext } from "./types";
 import type { ParsedTransaction } from "../fileParser";
 import { parseDataBR, parseMoneyBR, normalizeText } from "../brHelpers";
 
+/**
+ * Stone PDF parser — block-based approach.
+ * A block starts with a date line (DD/MM/YY or DD/MM/YYYY) + type (Entrada/Saída).
+ * Subsequent lines are accumulated as description until a monetary value is found.
+ * Second monetary value on a line (or after amount) is treated as balance.
+ */
 export const stonePdfParser: StatementParser = {
   id: "stone-pdf",
   name: "Stone (PDF)",
@@ -17,64 +23,145 @@ export const stonePdfParser: StatementParser = {
   async parse(ctx: ParserContext): Promise<ParsedTransaction[]> {
     const lines = ctx.textLines || [];
     const transactions: ParsedTransaction[] = [];
-    const DATE_RE = /^(\d{2}\/\d{2}\/\d{2,4})\s+/;
 
-    for (const line of lines) {
-      const dateMatch = DATE_RE.exec(line);
-      if (!dateMatch) continue;
+    // Regex for block start: date + type
+    const DATE_TYPE_RE = /^(\d{2}\/\d{2}\/\d{2,4})\s+(Entrada|Sa[ií]da)\b/i;
+    // Regex for monetary values
+    const MONEY_RE = /(-\s*)?R?\$?\s*([\d]+(?:\.[\d]{3})*,\d{2})/g;
 
-      const date = parseDataBR(dateMatch[1]);
-      if (!date) continue;
-
-      const rest = line.substring(dateMatch[0].length);
-      const tipoMatch = rest.match(/^(Entrada|Sa[ií]da)\s+/i);
-      if (!tipoMatch) continue;
-
-      const tipo = tipoMatch[1].toLowerCase();
-      const isDebit = tipo.startsWith("sa");
-      const afterTipo = rest.substring(tipoMatch[0].length);
-
-      // Find ALL monetary values
-      const moneyParts: { value: number; index: number; length: number }[] = [];
-      const moneyRe = /(-\s*)?R?\$?\s*([\d]+(?:\.[\d]{3})*,\d{2})/g;
-      let m: RegExpExecArray | null;
-      while ((m = moneyRe.exec(afterTipo)) !== null) {
-        const isNeg = !!(m[1] && m[1].trim() === "-");
-        const val = parseFloat(m[2].replace(/\./g, "").replace(",", "."));
-        if (!isNaN(val)) {
-          moneyParts.push({ value: isNeg ? -val : val, index: m.index, length: m[0].length });
-        }
-      }
-
-      if (moneyParts.length === 0) continue;
-
-      const descEnd = moneyParts[0].index;
-      let description = normalizeText(afterTipo.substring(0, descEnd));
-
-      const lastMoney = moneyParts[moneyParts.length - 1];
-      const afterLastMoney = afterTipo.substring(lastMoney.index + lastMoney.length).trim();
-      const contraparte = afterLastMoney
-        .replace(/STONE\s+INSTITUI[ÇC][ÃA]O.*$/i, "")
-        .replace(/Ag:\s*\d+.*$/i, "")
-        .trim();
-
-      const parts: string[] = [];
-      if (description) parts.push(description);
-      if (contraparte) parts.push(contraparte);
-      const fullDescription = parts.join(" | ") || tipo;
-
-      const amount = Math.abs(moneyParts[0].value);
-      if (amount === 0) continue;
-
-      transactions.push({
-        date,
-        description: fullDescription,
-        amount,
-        type: isDebit ? "debit" : "credit",
-      });
+    interface Block {
+      date: string;
+      type: "credit" | "debit";
+      descLines: string[];
+      amount?: number;
+      balance?: number;
     }
 
-    console.log(`[stonePdfParser] Parsed ${transactions.length} transactions`);
+    const blocks: Block[] = [];
+    let current: Block | null = null;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const startMatch = DATE_TYPE_RE.exec(line);
+      if (startMatch) {
+        // Flush previous block
+        if (current && current.amount != null) {
+          blocks.push(current);
+        }
+
+        const date = parseDataBR(startMatch[1]);
+        if (!date) continue;
+
+        const tipo = startMatch[2].toLowerCase();
+        const isDebit = tipo.startsWith("sa");
+
+        current = {
+          date,
+          type: isDebit ? "debit" : "credit",
+          descLines: [],
+        };
+
+        // Rest of the line after date+type might contain description or values
+        const afterType = line.substring(startMatch[0].length).trim();
+        if (afterType) {
+          // Check if it contains monetary values
+          const moneyValues = extractMoneyValues(afterType);
+          if (moneyValues.length > 0) {
+            // Text before first money is description
+            const firstMoneyIdx = afterType.search(MONEY_RE);
+            if (firstMoneyIdx > 0) {
+              const desc = afterType.substring(0, firstMoneyIdx).trim();
+              if (desc) current.descLines.push(desc);
+            }
+            current.amount = moneyValues[0];
+            if (moneyValues.length > 1) current.balance = moneyValues[moneyValues.length - 1];
+          } else {
+            current.descLines.push(afterType);
+          }
+        }
+        continue;
+      }
+
+      // Not a block start — accumulate into current block
+      if (current) {
+        if (current.amount != null) {
+          // Already have amount — this line might be contraparte or trailing info
+          const cleaned = normalizeText(line)
+            .replace(/STONE\s+INSTITUI[ÇC][ÃA]O.*$/i, "")
+            .replace(/Ag:\s*\d+.*$/i, "")
+            .trim();
+          if (cleaned && cleaned.length > 2) {
+            current.descLines.push(cleaned);
+          }
+          continue;
+        }
+
+        // Try to extract money from this line
+        const moneyValues = extractMoneyValues(line);
+        if (moneyValues.length > 0) {
+          // Text before first money is part of description
+          MONEY_RE.lastIndex = 0;
+          const firstMatch = MONEY_RE.exec(line);
+          if (firstMatch && firstMatch.index > 0) {
+            const desc = line.substring(0, firstMatch.index).trim();
+            if (desc) current.descLines.push(desc);
+          }
+          current.amount = moneyValues[0];
+          if (moneyValues.length > 1) current.balance = moneyValues[moneyValues.length - 1];
+        } else {
+          // Pure description line
+          const cleaned = normalizeText(line)
+            .replace(/STONE\s+INSTITUI[ÇC][ÃA]O.*$/i, "")
+            .replace(/Ag:\s*\d+.*$/i, "")
+            .trim();
+          if (cleaned && cleaned.length > 1) {
+            current.descLines.push(cleaned);
+          }
+        }
+      }
+    }
+
+    // Flush last block
+    if (current && current.amount != null) {
+      blocks.push(current);
+    }
+
+    // Convert blocks to transactions
+    for (const block of blocks) {
+      if (!block.amount || block.amount === 0) continue;
+
+      const descFull = block.descLines
+        .filter((d) => d.length > 0)
+        .join(" | ");
+
+      const description = descFull || (block.type === "credit" ? "Entrada" : "Saída");
+
+      transactions.push({
+        date: block.date,
+        description,
+        amount: Math.abs(block.amount),
+        type: block.type,
+        balance: block.balance,
+      } as ParsedTransaction & { balance?: number });
+    }
+
+    console.log(`[stonePdfParser] Parsed ${transactions.length} transactions from ${blocks.length} blocks`);
     return transactions;
   },
 };
+
+function extractMoneyValues(text: string): number[] {
+  const re = /(-\s*)?R?\$?\s*([\d]+(?:\.[\d]{3})*,\d{2})/g;
+  const values: number[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const isNeg = !!(m[1] && m[1].trim() === "-");
+    const val = parseFloat(m[2].replace(/\./g, "").replace(",", "."));
+    if (!isNaN(val)) {
+      values.push(isNeg ? -val : val);
+    }
+  }
+  return values;
+}
