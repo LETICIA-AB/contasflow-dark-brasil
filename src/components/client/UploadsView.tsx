@@ -5,6 +5,7 @@ import { classifyTransaction } from "@/data/classificationRules";
 import { resolveAccounts } from "@/data/chartOfAccounts";
 import { findInMemory } from "@/data/memoryStore";
 import { parseFile, parseCSVWithMapping, getCSVHeaders, getXlsxHeaders } from "@/data/fileParser";
+import { importParsedTransactions } from "@/data/models";
 import ColumnMappingWizard from "./ColumnMappingWizard";
 import { CheckCircle2, AlertTriangle, Lock, FolderUp, Clock, ChevronDown, ChevronRight } from "lucide-react";
 
