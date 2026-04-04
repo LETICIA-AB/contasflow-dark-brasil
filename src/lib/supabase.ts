@@ -50,3 +50,12 @@ export async function sbDelete(table: string, id: string): Promise<void> {
   });
   if (!r.ok) throw new Error(`Supabase DELETE ${table}/${id}: ${await r.text()}`);
 }
+
+/** DELETE ALL — removes every row from the table. */
+export async function sbDeleteAll(table: string): Promise<void> {
+  const r = await fetch(`${BASE}/rest/v1/${table}?id=not.is.null`, {
+    method: "DELETE",
+    headers: headers(),
+  });
+  if (!r.ok) throw new Error(`Supabase DELETE ALL ${table}: ${await r.text()}`);
+}

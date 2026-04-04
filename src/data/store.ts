@@ -337,7 +337,7 @@ export function saveUploads(uploads: Upload[]) {
 }
 
 // === Supabase async store (runs alongside localStorage) ===
-import { sbSelect, sbUpsert, supabaseConfigured } from "@/lib/supabase";
+import { sbSelect, sbUpsert, sbDeleteAll, supabaseConfigured } from "@/lib/supabase";
 
 /**
  * Fetch all clients + their transactions from Supabase.
@@ -465,6 +465,20 @@ export async function migrateLocalToSupabase(): Promise<void> {
     ...clients.map(persistClient),
     ...uploads.map(persistUpload),
   ]);
+}
+
+/**
+ * Apaga TODOS os dados — Supabase (cascade) + localStorage.
+ * Chamada pelo painel de administração ao clicar em "Resetar Dados".
+ */
+export async function clearAllData(): Promise<void> {
+  // 1. Supabase: deletar clients dispara CASCADE em transactions + uploads
+  if (supabaseConfigured) {
+    await sbDeleteAll("clients").catch(() => {});
+  }
+  // 2. localStorage: remover todas as chaves cf-*
+  const keysToRemove = Object.keys(localStorage).filter((k) => k.startsWith("cf-"));
+  keysToRemove.forEach((k) => localStorage.removeItem(k));
 }
 
 export function formatCurrency(value: number): string {

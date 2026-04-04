@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { type Client, type User, type Upload, loadUsers, saveUsers, loadUploads, loadClients, saveClients, formatCNPJ } from "@/data/store";
+import { type Client, type User, type Upload, loadUsers, saveUsers, loadUploads, loadClients, saveClients, formatCNPJ, clearAllData } from "@/data/store";
 import { loadBanks, saveBanks, addBank, type BankEntry } from "@/data/bankStore";
 
 interface Props {
@@ -187,14 +187,9 @@ export default function AdminView({ clients, onUpdate }: Props) {
     { id: "banks", label: "Bancos" },
   ] as const;
 
-  const handleResetData = () => {
-    if (!window.confirm("Tem certeza? Isso vai apagar TODOS os dados (empresas, usuários, extratos, bancos, memória) e recarregar a página.")) return;
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith("cf-v3-")) keysToRemove.push(key);
-    }
-    keysToRemove.forEach((k) => localStorage.removeItem(k));
+  const handleResetData = async () => {
+    if (!window.confirm("Tem certeza? Isso vai apagar TODOS os dados (empresas, usuários, extratos, transações, bancos, memória) inclusive no Supabase. Esta ação não pode ser desfeita.")) return;
+    await clearAllData();
     window.location.reload();
   };
 
