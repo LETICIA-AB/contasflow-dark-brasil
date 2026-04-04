@@ -39,6 +39,8 @@ export const stonePdfParser: StatementParser = {
 
     const blocks: Block[] = [];
     let current: Block | null = null;
+    // Lines that appear before the next date line — likely section headers like "Recebimento vendas"
+    let pendingDescLines: string[] = [];
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
@@ -52,7 +54,10 @@ export const stonePdfParser: StatementParser = {
         }
 
         const date = parseDataBR(startMatch[1]);
-        if (!date) continue;
+        if (!date) {
+          pendingDescLines = [];
+          continue;
+        }
 
         const tipo = startMatch[2].toLowerCase();
         const isDebit = tipo.startsWith("sa");
@@ -60,8 +65,9 @@ export const stonePdfParser: StatementParser = {
         current = {
           date,
           type: isDebit ? "debit" : "credit",
-          descLines: [],
+          descLines: [...pendingDescLines],
         };
+        pendingDescLines = [];
 
         // Rest of the line after date+type might contain description or values
         const afterType = line.substring(startMatch[0].length).trim();
@@ -84,7 +90,7 @@ export const stonePdfParser: StatementParser = {
         continue;
       }
 
-      // Not a block start — accumulate into current block
+      // Not a block start — accumulate into current block or save as pending
       if (current) {
         if (current.amount != null) {
           // Already have amount — this line might be contraparte or trailing info
@@ -119,6 +125,19 @@ export const stonePdfParser: StatementParser = {
           if (cleaned && cleaned.length > 1) {
             current.descLines.push(cleaned);
           }
+        }
+      } else {
+        // No current block — save as pending for the next block
+        const cleaned = normalizeText(line)
+          .replace(/STONE\s+INSTITUI[ÇC][ÃA]O.*$/i, "")
+          .replace(/Ag:\s*\d+.*$/i, "")
+          .replace(/DESCRI[ÇC][ÃA]O.*VALOR.*SALDO/i, "")
+          .replace(/Per[ií]odo.*\d{2}\/\d{2}/i, "")
+          .trim();
+        if (cleaned && cleaned.length > 2 && !extractMoneyValues(cleaned).length) {
+          pendingDescLines.push(cleaned);
+          // Keep only last 3 pending lines to avoid accumulating headers
+          if (pendingDescLines.length > 3) pendingDescLines.shift();
         }
       }
     }
