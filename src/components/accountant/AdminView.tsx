@@ -192,7 +192,7 @@ export default function AdminView({ clients, onUpdate }: Props) {
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key.startsWith("cf-v3-")) keysToRemove.push(key);
+      if (key && key.startsWith("cf-") && key !== "cf-theme") keysToRemove.push(key);
     }
     keysToRemove.forEach((k) => localStorage.removeItem(k));
     window.location.reload();
