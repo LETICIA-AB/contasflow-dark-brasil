@@ -152,7 +152,7 @@ export const stonePdfParser: StatementParser = {
           .replace(/DESCRI[ÇC][ÃA]O.*VALOR.*SALDO/i, "")
           .replace(/Per[ií]odo.*\d{2}\/\d{2}/i, "")
           .trim();
-        if (cleaned && cleaned.length > 2 && !extractMoneyValues(cleaned).length) {
+        if (cleaned && cleaned.length > 2 && !extractMoneyValues(cleaned).length && !isHeaderLine(cleaned)) {
           pendingDescLines.push(cleaned);
           // Keep only last 3 pending lines to avoid accumulating headers
           if (pendingDescLines.length > 3) pendingDescLines.shift();
