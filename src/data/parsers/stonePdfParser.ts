@@ -2,6 +2,24 @@ import type { StatementParser, ParserContext } from "./types";
 import type { ParsedTransaction } from "../fileParser";
 import { parseDataBR, parseMoneyBR, normalizeText } from "../brHelpers";
 
+const HEADER_PATTERNS = [
+  /extrato de conta/i,
+  /emitido em/i,
+  /p[aá]gina\s+\d+\s+de\s+\d+/i,
+  /per[ií]odo\s*:/i,
+  /DATA\s+TIPO\s+DESCRI/i,
+  /VALOR\s+SALDO/i,
+  /^CONTRAPARTE$/i,
+  /stone\s+institui/i,
+  /^CNPJ/i,
+  /^Ag:\s*\d/i,
+  /^Conta:\s*\d/i,
+];
+
+function isHeaderLine(line: string): boolean {
+  return HEADER_PATTERNS.some((re) => re.test(line));
+}
+
 /**
  * Stone PDF parser — block-based approach.
  * A block starts with a date line (DD/MM/YY or DD/MM/YYYY) + type (Entrada/Saída).
