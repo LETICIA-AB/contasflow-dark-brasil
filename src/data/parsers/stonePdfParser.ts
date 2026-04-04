@@ -83,7 +83,7 @@ export const stonePdfParser: StatementParser = {
         current = {
           date,
           type: isDebit ? "debit" : "credit",
-          descLines: [...pendingDescLines],
+          descLines: pendingDescLines.filter((l) => !isHeaderLine(l)),
         };
         pendingDescLines = [];
 
