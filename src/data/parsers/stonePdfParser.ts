@@ -39,6 +39,8 @@ export const stonePdfParser: StatementParser = {
 
     const blocks: Block[] = [];
     let current: Block | null = null;
+    // Lines that appear before the next date line — likely section headers like "Recebimento vendas"
+    let pendingDescLines: string[] = [];
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
@@ -52,7 +54,10 @@ export const stonePdfParser: StatementParser = {
         }
 
         const date = parseDataBR(startMatch[1]);
-        if (!date) continue;
+        if (!date) {
+          pendingDescLines = [];
+          continue;
+        }
 
         const tipo = startMatch[2].toLowerCase();
         const isDebit = tipo.startsWith("sa");
@@ -60,8 +65,9 @@ export const stonePdfParser: StatementParser = {
         current = {
           date,
           type: isDebit ? "debit" : "credit",
-          descLines: [],
+          descLines: [...pendingDescLines],
         };
+        pendingDescLines = [];
 
         // Rest of the line after date+type might contain description or values
         const afterType = line.substring(startMatch[0].length).trim();
