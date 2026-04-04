@@ -2,6 +2,24 @@ import type { StatementParser, ParserContext } from "./types";
 import type { ParsedTransaction } from "../fileParser";
 import { parseDataBR, parseMoneyBR, normalizeText } from "../brHelpers";
 
+const HEADER_PATTERNS = [
+  /extrato de conta/i,
+  /emitido em/i,
+  /p[aá]gina\s+\d+\s+de\s+\d+/i,
+  /per[ií]odo\s*:/i,
+  /DATA\s+TIPO\s+DESCRI/i,
+  /VALOR\s+SALDO/i,
+  /^CONTRAPARTE$/i,
+  /stone\s+institui/i,
+  /^CNPJ/i,
+  /^Ag:\s*\d/i,
+  /^Conta:\s*\d/i,
+];
+
+function isHeaderLine(line: string): boolean {
+  return HEADER_PATTERNS.some((re) => re.test(line));
+}
+
 /**
  * Stone PDF parser — block-based approach.
  * A block starts with a date line (DD/MM/YY or DD/MM/YYYY) + type (Entrada/Saída).
@@ -65,7 +83,7 @@ export const stonePdfParser: StatementParser = {
         current = {
           date,
           type: isDebit ? "debit" : "credit",
-          descLines: [...pendingDescLines],
+          descLines: pendingDescLines.filter((l) => !isHeaderLine(l)),
         };
         pendingDescLines = [];
 
@@ -98,7 +116,7 @@ export const stonePdfParser: StatementParser = {
             .replace(/STONE\s+INSTITUI[ÇC][ÃA]O.*$/i, "")
             .replace(/Ag:\s*\d+.*$/i, "")
             .trim();
-          if (cleaned && cleaned.length > 2) {
+          if (cleaned && cleaned.length > 2 && !isHeaderLine(cleaned)) {
             current.descLines.push(cleaned);
           }
           continue;
@@ -122,7 +140,7 @@ export const stonePdfParser: StatementParser = {
             .replace(/STONE\s+INSTITUI[ÇC][ÃA]O.*$/i, "")
             .replace(/Ag:\s*\d+.*$/i, "")
             .trim();
-          if (cleaned && cleaned.length > 1) {
+          if (cleaned && cleaned.length > 1 && !isHeaderLine(cleaned)) {
             current.descLines.push(cleaned);
           }
         }
@@ -134,7 +152,7 @@ export const stonePdfParser: StatementParser = {
           .replace(/DESCRI[ÇC][ÃA]O.*VALOR.*SALDO/i, "")
           .replace(/Per[ií]odo.*\d{2}\/\d{2}/i, "")
           .trim();
-        if (cleaned && cleaned.length > 2 && !extractMoneyValues(cleaned).length) {
+        if (cleaned && cleaned.length > 2 && !extractMoneyValues(cleaned).length && !isHeaderLine(cleaned)) {
           pendingDescLines.push(cleaned);
           // Keep only last 3 pending lines to avoid accumulating headers
           if (pendingDescLines.length > 3) pendingDescLines.shift();
