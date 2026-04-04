@@ -90,7 +90,7 @@ export const stonePdfParser: StatementParser = {
         continue;
       }
 
-      // Not a block start — accumulate into current block
+      // Not a block start — accumulate into current block or save as pending
       if (current) {
         if (current.amount != null) {
           // Already have amount — this line might be contraparte or trailing info
@@ -125,6 +125,19 @@ export const stonePdfParser: StatementParser = {
           if (cleaned && cleaned.length > 1) {
             current.descLines.push(cleaned);
           }
+        }
+      } else {
+        // No current block — save as pending for the next block
+        const cleaned = normalizeText(line)
+          .replace(/STONE\s+INSTITUI[ÇC][ÃA]O.*$/i, "")
+          .replace(/Ag:\s*\d+.*$/i, "")
+          .replace(/DESCRI[ÇC][ÃA]O.*VALOR.*SALDO/i, "")
+          .replace(/Per[ií]odo.*\d{2}\/\d{2}/i, "")
+          .trim();
+        if (cleaned && cleaned.length > 2 && !extractMoneyValues(cleaned).length) {
+          pendingDescLines.push(cleaned);
+          // Keep only last 3 pending lines to avoid accumulating headers
+          if (pendingDescLines.length > 3) pendingDescLines.shift();
         }
       }
     }
