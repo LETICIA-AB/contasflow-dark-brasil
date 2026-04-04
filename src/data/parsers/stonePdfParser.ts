@@ -116,7 +116,7 @@ export const stonePdfParser: StatementParser = {
             .replace(/STONE\s+INSTITUI[ÇC][ÃA]O.*$/i, "")
             .replace(/Ag:\s*\d+.*$/i, "")
             .trim();
-          if (cleaned && cleaned.length > 2) {
+          if (cleaned && cleaned.length > 2 && !isHeaderLine(cleaned)) {
             current.descLines.push(cleaned);
           }
           continue;
