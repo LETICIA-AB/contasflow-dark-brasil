@@ -7,6 +7,9 @@ import { itauPdfParser } from "./itauPdfParser";
 import { santanderPdfParser } from "./santanderPdfParser";
 import { interPdfParser } from "./interPdfParser";
 import { sicoobPdfParser } from "./sicoobPdfParser";
+import { bradescoPdfParser } from "./bradescoPdfParser";
+import { nubankPjPdfParser } from "./nubankPjPdfParser";
+import { pagbankPdfParser } from "./pagbankPdfParser";
 import { stonePdfParser } from "./stonePdfParser";
 import { cloudwalkPdfParser } from "./cloudwalkPdfParser";
 import { genericPdfParser } from "./genericPdfParser";
@@ -20,6 +23,9 @@ const ALL_PARSERS: StatementParser[] = [
   santanderPdfParser,
   interPdfParser,
   sicoobPdfParser,
+  bradescoPdfParser,
+  nubankPjPdfParser,
+  pagbankPdfParser,
   stonePdfParser,
   cloudwalkPdfParser,
   genericPdfParser,
