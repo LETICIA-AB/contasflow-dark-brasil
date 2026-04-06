@@ -1,38 +1,37 @@
 
 
-## Fix: Filtrar Headers/Footers de Página no Stone PDF Parser
+## Parsers PDF Dedicados por Banco + Registry Atualizado
 
-### Problema
-Quando o PDF tem múltiplas páginas, as linhas de cabeçalho/rodapé de cada página ("Extrato de conta corrente", "Emitido em...", "Página X de Y", "Período: de...", "DATA TIPO DESCRIÇÃO VALOR SALDO CONTRAPARTE") são capturadas como `pendingDescLines` e concatenadas na descrição da próxima transação.
+### Resumo
+Criar 5 novos parsers PDF dedicados (BB, Itaú, Santander, Inter, Sicoob), reescrever o `genericPdfParser` como fallback multi-estratégia, e atualizar o registry com todos os parsers.
 
-O filtro atual (linhas 131-135) tenta limpar essas linhas, mas só remove padrões parciais — frases como "Extrato de conta corrente" e "Emitido em 02 fevereiro 2026 às 12:10:20" passam pelo filtro e se acumulam no buffer.
+### Arquivos Novos (5)
 
-### Solução
-Adicionar um filtro robusto de linhas de header/footer que descarte qualquer linha contendo padrões conhecidos de cabeçalho Stone. Aplicar esse filtro em **todos** os pontos onde linhas são adicionadas a `descLines` (tanto no bloco `pendingDescLines` quanto no bloco `current.descLines` após o amount).
+| Arquivo | Banco | Heurística de detecção | Lógica de débito/crédito |
+|---------|-------|----------------------|--------------------------|
+| `src/data/parsers/bancoBrasilPdfParser.ts` | Banco do Brasil | "banco do brasil" ou padrão `valor+C/D` | Sufixo `C` ou `D` após valor |
+| `src/data/parsers/itauPdfParser.ts` | Itaú | "itaú" + "movimentação" | Sufixo `-` = débito, sem sufixo = crédito |
+| `src/data/parsers/santanderPdfParser.ts` | Santander | "santander" ou "SALDO EM dd/MM" | Coluna crédito vs coluna débito (com `-`) |
+| `src/data/parsers/interPdfParser.ts` | Banco Inter | "banco inter" ou data extenso | Prefixo `-R$` = débito, `R$` = crédito |
+| `src/data/parsers/sicoobPdfParser.ts` | Sicoob | "sicoob" ou "PERÍODO:" | Sufixo `D` ou `C` após valor |
 
-### Mudança Concreta
+### Arquivos Substituídos (2)
 
-**`src/data/parsers/stonePdfParser.ts`**:
+| Arquivo | Mudança |
+|---------|---------|
+| `src/data/parsers/genericPdfParser.ts` | Reescrito com 5 estratégias em cascata: sufixo C/D → sufixo `-` → prefixo `+/-` → `R$` com sinal → inferência por palavras-chave |
+| `src/data/parsers/registry.ts` | Adiciona os 5 novos parsers na lista, mantém ordem: específicos primeiro → genérico → OFX/CSV/XLSX |
 
-1. Criar função `isHeaderLine(line: string): boolean` que retorna `true` para linhas contendo:
-   - `Extrato de conta corrente`
-   - `Emitido em`
-   - `Página \d+ de \d+`
-   - `Período:` ou `Periodo:`
-   - `DATA TIPO DESCRIÇÃO VALOR SALDO`
-   - `CONTRAPARTE` (sozinha ou como header)
-   - `Stone Instituição de Pagamento`
-   - `CNPJ` / `Ag:` / `Conta:` (metadados bancários)
+### Lógica de cada parser (conforme código fornecido pelo usuário)
 
-2. Usar `isHeaderLine()` como guarda antes de fazer `.push()` em `descLines` e `pendingDescLines` — nas 3 seções:
-   - Linha 68: `descLines: [...pendingDescLines]` → filtrar pending
-   - Linha 101-103: contraparte após amount → checar antes de push
-   - Linha 125-126: descrição pura → checar antes de push
-   - Linha 137-140: pending lines → checar antes de push
+Cada parser implementa `StatementParser` com:
+- `canParse()`: retorna score 0.95 se detectar nome do banco, score intermediário se detectar padrão de valores, 0 caso contrário
+- `parse()`: extrai transações com lógica específica do banco
+- Funções auxiliares locais (`parseBRNumber`, `extractDescription`, etc.)
 
-### Resultado Esperado
-"Antecipação" aparecerá limpo, sem cabeçalhos de página concatenados. A `description_full` conterá apenas: `Recebimento vendas | Antecipação` (ou similar), sem metadados do PDF.
-
-### Arquivo Modificado
-- `src/data/parsers/stonePdfParser.ts` — adicionar `isHeaderLine()` + aplicar filtro em 4 pontos
+### O que NÃO muda
+- `stonePdfParser.ts` e `cloudwalkPdfParser.ts` (já existem e funcionam)
+- `types.ts`, `fileParser.ts`, `pdfExtractor.ts`, `brHelpers.ts`
+- Fluxo de upload, classificação, modelos contábeis
+- Testes existentes continuam passando
 
