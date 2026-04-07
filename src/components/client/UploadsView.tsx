@@ -142,6 +142,37 @@ export default function UploadsView({ client, onUpdate, onNavigate }: Props) {
     setImportStats({ imported: newTxs.length, auto: autoCount, pending: pendingCount, skipped });
     saveClients(allClients);
     onUpdate();
+
+    // Auto-classify pending transactions with AI in background
+    if (pendingCount > 0) {
+      const pendingTxs = newTxs.filter(t => t.classifiedBy === "pending");
+      classifyPendingBatch(pendingTxs).then((results) => {
+        if (results.size === 0) return;
+        const latestClients = loadClients();
+        const latestC = latestClients.find((cl) => cl.id === client.id);
+        if (!latestC) return;
+        let aiCount = 0;
+        for (const tx of latestC.transactions) {
+          const aiResult = results.get(tx.id);
+          if (!aiResult) continue;
+          tx.category = aiResult.category;
+          tx.classifiedBy = "auto";
+          tx.confidenceScore = Math.round(aiResult.confidence * 100);
+          const accounts = resolveAccounts(aiResult.category, tx.type, latestC.bank, latestC.chartOverrides);
+          tx.debitAccount = accounts.debit;
+          tx.creditAccount = accounts.credit;
+          saveToMemory(tx.description, aiResult.category, accounts.debit, accounts.credit, latestC.id);
+          aiCount++;
+        }
+        if (aiCount > 0) {
+          saveClients(latestClients);
+          onUpdate();
+          toast.success(`IA classificou mais ${aiCount} transações automaticamente!`);
+        }
+      }).catch((err) => {
+        console.warn("[Upload AI] Auto-classification failed:", err.message);
+      });
+    }
   };
 
   const handleFiles = (files: FileList | null) => {
