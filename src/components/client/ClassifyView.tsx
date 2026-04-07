@@ -4,6 +4,9 @@ import { resolveAccounts } from "@/data/chartOfAccounts";
 import { recordClassification } from "@/data/classificationRules";
 import { saveToMemory, findInMemory } from "@/data/memoryStore";
 import { Textarea } from "@/components/ui/textarea";
+import { classifyPendingBatch } from "@/data/classifyAI";
+import { toast } from "sonner";
+import { Sparkles } from "lucide-react";
 
 interface Props {
   client: Client;
@@ -19,11 +22,66 @@ export default function ClassifyView({ client, onUpdate }: Props) {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [selectedCategory, setSelectedCategory] = useState<Record<string, string>>({});
   const [othersInput, setOthersInput] = useState<Record<string, string>>({});
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiProgress, setAiProgress] = useState<string | null>(null);
 
   const pending = client.transactions.filter((t) => t.classifiedBy === "pending");
   const total = client.transactions.length;
   const classified = total - pending.length;
   const progress = total > 0 ? Math.round((classified / total) * 100) : 100;
+
+  const handleAIClassify = async () => {
+    if (pending.length === 0) return;
+    setAiLoading(true);
+    setAiProgress(`Classificando ${pending.length} transações...`);
+
+    try {
+      const results = await classifyPendingBatch(pending, (done, total) => {
+        setAiProgress(`Processando ${done}/${total}...`);
+      });
+
+      if (results.size === 0) {
+        toast.info("Nenhuma transação foi classificada com confiança suficiente.");
+        setAiLoading(false);
+        setAiProgress(null);
+        return;
+      }
+
+      // Apply classifications
+      const clients = loadClients();
+      const c = clients.find((cl) => cl.id === client.id);
+      if (!c) return;
+
+      let appliedCount = 0;
+      for (const tx of c.transactions) {
+        const aiResult = results.get(tx.id);
+        if (!aiResult) continue;
+        tx.category = aiResult.category;
+        tx.classifiedBy = "auto";
+        tx.confidenceScore = Math.round(aiResult.confidence * 100);
+        const accounts = resolveAccounts(aiResult.category, tx.type, c.bank, c.chartOverrides);
+        tx.debitAccount = accounts.debit;
+        tx.creditAccount = accounts.credit;
+        // Save to memory for future auto-classification
+        saveToMemory(tx.description, aiResult.category, accounts.debit, accounts.credit, c.id);
+        appliedCount++;
+      }
+
+      const stillPending = c.transactions.filter((t) => t.classifiedBy === "pending");
+      if (stillPending.length === 0) c.status = "review";
+
+      saveClients(clients);
+      onUpdate();
+      setTick((t) => t + 1);
+      toast.success(`${appliedCount} transações classificadas pela IA!`);
+    } catch (err: any) {
+      console.error("[AI Classify]", err);
+      toast.error(err.message || "Erro na classificação AI");
+    } finally {
+      setAiLoading(false);
+      setAiProgress(null);
+    }
+  };
 
   const handleCategorySelect = (txId: string, category: string) => {
     if (category === "Outros") {
@@ -112,8 +170,25 @@ export default function ClassifyView({ client, onUpdate }: Props) {
       {/* Pending inline */}
       {pending.length > 0 && (
         <div className="cf-card border-cf-yellow/30 p-0 overflow-hidden">
-          <div className="px-5 py-4 border-b border-border bg-cf-yellow/5">
+          <div className="px-5 py-4 border-b border-border bg-cf-yellow/5 flex items-center justify-between">
             <h3 className="font-semibold text-cf-yellow">⚠ {pending.length} transações pendentes</h3>
+            <button
+              onClick={handleAIClassify}
+              disabled={aiLoading}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {aiLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+                  {aiProgress || "Classificando..."}
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  Classificar com IA
+                </>
+              )}
+            </button>
           </div>
           <div className="divide-y divide-border/50">
             {pending.map((tx) => (
