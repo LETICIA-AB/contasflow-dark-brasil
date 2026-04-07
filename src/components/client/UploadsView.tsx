@@ -3,11 +3,13 @@ import { type Client, type Transaction, type Upload, loadClients, saveClients, l
 import { addNotification } from "@/data/notificationStore";
 import { classifyTransaction } from "@/data/classificationRules";
 import { resolveAccounts } from "@/data/chartOfAccounts";
-import { findInMemory } from "@/data/memoryStore";
+import { findInMemory, saveToMemory } from "@/data/memoryStore";
 import { parseFile, parseCSVWithMapping, getCSVHeaders, getXlsxHeaders } from "@/data/fileParser";
 import { importParsedTransactions } from "@/data/models";
+import { classifyPendingBatch } from "@/data/classifyAI";
 import ColumnMappingWizard from "./ColumnMappingWizard";
-import { CheckCircle2, AlertTriangle, Lock, FolderUp, Clock, ChevronDown, ChevronRight } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Lock, FolderUp, Clock, ChevronDown, ChevronRight, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 
 interface Props {
   client: Client;
