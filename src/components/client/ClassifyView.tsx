@@ -4,6 +4,9 @@ import { resolveAccounts } from "@/data/chartOfAccounts";
 import { recordClassification } from "@/data/classificationRules";
 import { saveToMemory, findInMemory } from "@/data/memoryStore";
 import { Textarea } from "@/components/ui/textarea";
+import { classifyPendingBatch } from "@/data/classifyAI";
+import { toast } from "sonner";
+import { Sparkles } from "lucide-react";
 
 interface Props {
   client: Client;
