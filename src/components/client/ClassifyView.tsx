@@ -22,11 +22,66 @@ export default function ClassifyView({ client, onUpdate }: Props) {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [selectedCategory, setSelectedCategory] = useState<Record<string, string>>({});
   const [othersInput, setOthersInput] = useState<Record<string, string>>({});
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiProgress, setAiProgress] = useState<string | null>(null);
 
   const pending = client.transactions.filter((t) => t.classifiedBy === "pending");
   const total = client.transactions.length;
   const classified = total - pending.length;
   const progress = total > 0 ? Math.round((classified / total) * 100) : 100;
+
+  const handleAIClassify = async () => {
+    if (pending.length === 0) return;
+    setAiLoading(true);
+    setAiProgress(`Classificando ${pending.length} transações...`);
+
+    try {
+      const results = await classifyPendingBatch(pending, (done, total) => {
+        setAiProgress(`Processando ${done}/${total}...`);
+      });
+
+      if (results.size === 0) {
+        toast.info("Nenhuma transação foi classificada com confiança suficiente.");
+        setAiLoading(false);
+        setAiProgress(null);
+        return;
+      }
+
+      // Apply classifications
+      const clients = loadClients();
+      const c = clients.find((cl) => cl.id === client.id);
+      if (!c) return;
+
+      let appliedCount = 0;
+      for (const tx of c.transactions) {
+        const aiResult = results.get(tx.id);
+        if (!aiResult) continue;
+        tx.category = aiResult.category;
+        tx.classifiedBy = "auto";
+        tx.confidenceScore = Math.round(aiResult.confidence * 100);
+        const accounts = resolveAccounts(aiResult.category, tx.type, c.bank, c.chartOverrides);
+        tx.debitAccount = accounts.debit;
+        tx.creditAccount = accounts.credit;
+        // Save to memory for future auto-classification
+        saveToMemory(tx.description, aiResult.category, accounts.debit, accounts.credit, c.id);
+        appliedCount++;
+      }
+
+      const stillPending = c.transactions.filter((t) => t.classifiedBy === "pending");
+      if (stillPending.length === 0) c.status = "review";
+
+      saveClients(clients);
+      onUpdate();
+      setTick((t) => t + 1);
+      toast.success(`${appliedCount} transações classificadas pela IA!`);
+    } catch (err: any) {
+      console.error("[AI Classify]", err);
+      toast.error(err.message || "Erro na classificação AI");
+    } finally {
+      setAiLoading(false);
+      setAiProgress(null);
+    }
+  };
 
   const handleCategorySelect = (txId: string, category: string) => {
     if (category === "Outros") {
