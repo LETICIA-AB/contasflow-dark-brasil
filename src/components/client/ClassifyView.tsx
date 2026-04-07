@@ -170,8 +170,25 @@ export default function ClassifyView({ client, onUpdate }: Props) {
       {/* Pending inline */}
       {pending.length > 0 && (
         <div className="cf-card border-cf-yellow/30 p-0 overflow-hidden">
-          <div className="px-5 py-4 border-b border-border bg-cf-yellow/5">
+          <div className="px-5 py-4 border-b border-border bg-cf-yellow/5 flex items-center justify-between">
             <h3 className="font-semibold text-cf-yellow">⚠ {pending.length} transações pendentes</h3>
+            <button
+              onClick={handleAIClassify}
+              disabled={aiLoading}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {aiLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+                  {aiProgress || "Classificando..."}
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  Classificar com IA
+                </>
+              )}
+            </button>
           </div>
           <div className="divide-y divide-border/50">
             {pending.map((tx) => (
