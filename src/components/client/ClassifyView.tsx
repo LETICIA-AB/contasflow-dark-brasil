@@ -133,7 +133,20 @@ export default function ClassifyView({ client, onUpdate }: Props) {
 
   const badgeFor = (t: Transaction) => {
     if (t.classifiedBy === "memory") return <span className="cf-badge-purple">🧠 Memória</span>;
-    if (t.classifiedBy === "auto") return <span className="cf-badge-accent">⚡ IA</span>;
+    if (t.classifiedBy === "auto") return (
+      <span className="inline-flex items-center gap-1">
+        <span className="cf-badge-accent">⚡ IA</span>
+        {t.confidenceScore != null && (
+          <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+            t.confidenceScore >= 90 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" :
+            t.confidenceScore >= 70 ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" :
+            "bg-red-500/15 text-red-600 dark:text-red-400"
+          }`}>
+            {t.confidenceScore}%
+          </span>
+        )}
+      </span>
+    );
     if (t.classifiedBy === "client") return <span className="cf-badge-blue">👤 Cliente</span>;
     if (t.classifiedBy === "accountant") return <span className="cf-badge-purple">✍ Contador</span>;
     return <span className="cf-badge-yellow">⏳ Pendente</span>;
